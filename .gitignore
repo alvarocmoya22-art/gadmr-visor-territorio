@@ -1,0 +1,11 @@
+node_modules
+dist
+*.log
+.DS_Store
+
+# Secretos locales: el token de Mapillary no va al repositorio
+.env.local
+.env
+
+# Artefactos de compilacion de TypeScript
+*.tsbuildinfo

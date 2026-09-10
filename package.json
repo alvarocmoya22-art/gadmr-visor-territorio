@@ -1,0 +1,28 @@
+{
+  "name": "gadmr-visor-territorio",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Tablero interno GADM Riobamba: levantamiento territorial con OpenStreetMap, Every Door y Panoramax",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "maplibre-gl": "^5.6.0",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1"
+  },
+  "devDependencies": {
+    "@types/react": "^19.1.16",
+    "@types/react-dom": "^19.1.9",
+    "@vitejs/plugin-react": "^5.0.3",
+    "autoprefixer": "^10.4.21",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^3.4.17",
+    "typescript": "~5.8.3",
+    "vite": "^7.1.7"
+  }
+}

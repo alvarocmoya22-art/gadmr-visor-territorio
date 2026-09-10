@@ -1,0 +1,377 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Sistema de diseño GADM Riobamba · tokens --gr-
+   Tema claro completo en :root; el tema oscuro solo redefine. */
+:root {
+  color-scheme: light;
+
+  --gr-azul-500: #0f4c81;
+  --gr-azul-700: #0a3860;
+  --gr-azul-100: #e4edf6;
+  --gr-rojo-500: #a8231c;
+
+  --gr-ok: #1b6046;
+  --gr-aviso: #7a5200;
+  --gr-error: #a8231c;
+  --gr-info: #0f4c81;
+
+  --gr-fondo: #eef1f4;
+  --gr-superficie: #ffffff;
+  --gr-tinta: #0f1922;
+  --gr-tinta-2: #3c4a57;
+  --gr-tinta-3: #66757f;
+  --gr-linea: #d3dbe2;
+  --gr-linea-fuerte: #b4c0ca;
+
+  --gr-s1: #2c74b0;
+  --gr-s2: #d1732b;
+  --gr-s3: #1f9070;
+  --gr-s4: #8a5ad6;
+  --gr-s5: #ce3d63;
+  --gr-s6: #0090ae;
+  --gr-s7: #7f8c14;
+  --gr-s8: #b0479c;
+  --gr-s-otros: #8496a4;
+
+  /* Limite de barrio: color propio, fuera de las series tematicas, para que
+     un barrio nunca se lea como una categoria de dato.
+     NO cambia con el tema: el mapa base de OSM es siempre claro, asi que un
+     tono claro «para tema oscuro» se perderia justo sobre el. */
+  --gr-limite-barrio: #8e2f8a;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+    --gr-azul-100: #17334d;
+    --gr-ok: #7dccaa;
+    --gr-aviso: #e8b75b;
+    --gr-error: #ff9a90;
+    --gr-info: #74b2e6;
+    --gr-fondo: #0b131b;
+    --gr-superficie: #131e28;
+    --gr-tinta: #e7eef4;
+    --gr-tinta-2: #b3c1cd;
+    --gr-tinta-3: #8496a4;
+    --gr-linea: #2a3945;
+    --gr-linea-fuerte: #3b4c5a;
+    --gr-s1: #4e95d2;
+    --gr-s2: #d07b33;
+    --gr-s3: #35a67f;
+    --gr-s4: #9e77dc;
+    --gr-s5: #dc5a78;
+    --gr-s6: #1fa5c2;
+    --gr-s7: #8e9d22;
+    --gr-s8: #c25cae;
+  }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --gr-azul-100: #17334d;
+  --gr-ok: #7dccaa;
+  --gr-aviso: #e8b75b;
+  --gr-error: #ff9a90;
+  --gr-info: #74b2e6;
+  --gr-fondo: #0b131b;
+  --gr-superficie: #131e28;
+  --gr-tinta: #e7eef4;
+  --gr-tinta-2: #b3c1cd;
+  --gr-tinta-3: #8496a4;
+  --gr-linea: #2a3945;
+  --gr-linea-fuerte: #3b4c5a;
+  --gr-s1: #4e95d2;
+  --gr-s2: #d07b33;
+  --gr-s3: #35a67f;
+  --gr-s4: #9e77dc;
+  --gr-s5: #dc5a78;
+  --gr-s6: #1fa5c2;
+  --gr-s7: #8e9d22;
+  --gr-s8: #c25cae;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+@media (min-width: 1024px) {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+}
+
+body {
+  margin: 0;
+  background: var(--gr-fondo);
+  color: var(--gr-tinta);
+  font-family: Archivo, 'Segoe UI', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Foco: anillo 3 px azul, desplazado 2 px */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 3px solid var(--gr-azul-500);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+@layer components {
+  .gr-eyebrow {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--gr-tinta-3);
+  }
+  .gr-eyebrow::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--gr-linea);
+  }
+
+  .gr-kpi {
+    background: var(--gr-superficie);
+    border: 1px solid var(--gr-linea);
+    border-radius: 4px;
+    padding: 0.75rem 0.875rem;
+  }
+  .gr-kpi__valor {
+    font-family: 'IBM Plex Mono', Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    font-size: 1.5rem;
+    line-height: 1.1;
+    color: var(--gr-tinta);
+  }
+  .gr-kpi__rotulo {
+    font-size: 0.75rem;
+    color: var(--gr-tinta-2);
+    margin-top: 0.25rem;
+  }
+  .gr-kpi__pie {
+    font-size: 0.6875rem;
+    color: var(--gr-tinta-3);
+    margin-top: 0.125rem;
+  }
+
+  .gr-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.1rem 0.45rem;
+    border-radius: 4px;
+    border: 1px solid currentColor;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .gr-chip--ok { color: var(--gr-ok); }
+  .gr-chip--aviso { color: var(--gr-aviso); }
+  .gr-chip--error { color: var(--gr-error); }
+  .gr-chip--info { color: var(--gr-info); }
+  .gr-chip--neutro { color: var(--gr-tinta-3); }
+
+  .gr-nota {
+    border-left: 3px solid var(--gr-info);
+    background: var(--gr-superficie);
+    padding: 0.625rem 0.75rem;
+    font-family: 'IBM Plex Serif', Georgia, serif;
+    font-size: 0.8125rem;
+    line-height: 1.5;
+    color: var(--gr-tinta-2);
+    border-radius: 0 4px 4px 0;
+  }
+  .gr-nota--aviso { border-left-color: var(--gr-aviso); }
+  .gr-nota--alerta { border-left-color: var(--gr-error); }
+
+  .gr-tabla {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8125rem;
+  }
+  .gr-tabla th {
+    text-align: left;
+    font-weight: 600;
+    font-size: 0.6875rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--gr-tinta-3);
+    border-bottom: 1px solid var(--gr-linea-fuerte);
+    padding: 0.4rem 0.6rem;
+    position: sticky;
+    top: 0;
+    background: var(--gr-superficie);
+    z-index: 1;
+  }
+  .gr-tabla td {
+    padding: 0.4rem 0.6rem;
+    border-bottom: 1px solid var(--gr-linea);
+    color: var(--gr-tinta-2);
+    vertical-align: top;
+  }
+  .gr-tabla tbody tr:hover td { background: var(--gr-azul-100); }
+  .gr-num {
+    font-family: 'IBM Plex Mono', Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .gr-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    min-height: 32px;
+    padding: 0.3rem 0.7rem;
+    border-radius: 4px;
+    border: 1px solid var(--gr-azul-500);
+    background: var(--gr-azul-500);
+    color: #fff;
+    font: inherit;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  /* --gr-info sigue al tema; --gr-azul-500 no, y en oscuro no contrastaria. */
+  .gr-btn--secundario {
+    background: transparent;
+    color: var(--gr-info);
+    border-color: currentColor;
+  }
+
+  .gr-ficha dt {
+    font-size: 0.6875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--gr-tinta-3);
+  }
+  .gr-ficha dd {
+    margin: 0 0 0.5rem;
+    font-size: 0.8125rem;
+    color: var(--gr-tinta);
+  }
+}
+
+/* Rotulo de plataforma: marcador HTML, no una capa de simbolos del mapa */
+.gr-rotulo-plataforma {
+  display: grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 5px;
+  border-radius: 11px;
+  border: 1px solid var(--gr-azul-500);
+  background: var(--gr-superficie);
+  color: var(--gr-azul-500);
+  font-family: Archivo, 'Segoe UI', system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  box-shadow: 0 1px 4px rgb(15 25 34 / 30%);
+  pointer-events: auto;
+  cursor: default;
+}
+:root[data-theme='dark'] .gr-rotulo-plataforma {
+  border-color: var(--gr-info);
+  color: var(--gr-info);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .gr-rotulo-plataforma {
+    border-color: var(--gr-info);
+    color: var(--gr-info);
+  }
+}
+
+/* Rotulo de la plataforma elegida: invertido, para que se lea a distancia */
+.gr-rotulo-plataforma--activa {
+  background: var(--gr-azul-500);
+  color: #fff;
+  border-color: var(--gr-azul-700);
+  min-width: 26px;
+  height: 26px;
+  font-size: 13px;
+  box-shadow: 0 2px 8px rgb(15 25 34 / 45%);
+}
+:root[data-theme='dark'] .gr-rotulo-plataforma--activa {
+  background: var(--gr-info);
+  color: #0b131b;
+  border-color: var(--gr-info);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .gr-rotulo-plataforma--activa {
+    background: var(--gr-info);
+    color: #0b131b;
+    border-color: var(--gr-info);
+  }
+}
+
+/* Marca de la foto que se ve en el panel: punto mas cono de vision */
+.gr-marca-foto {
+  position: relative;
+  width: 0;
+  height: 0;
+  pointer-events: auto;
+  cursor: help;
+}
+.gr-marca-foto__punto {
+  position: absolute;
+  left: -7px;
+  top: -7px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #7f8c14;
+  border: 3px solid #fff;
+  box-shadow: 0 0 0 1px rgb(15 25 34 / 45%);
+}
+/* El cono apunta al norte y se rota con el rumbo de la camara */
+.gr-marca-foto__cono {
+  position: absolute;
+  left: -13px;
+  top: -34px;
+  width: 26px;
+  height: 30px;
+  transform-origin: 50% 100%;
+  background: linear-gradient(
+    to top,
+    color-mix(in srgb, #7f8c14 70%, transparent),
+    color-mix(in srgb, #7f8c14 5%, transparent)
+  );
+  clip-path: polygon(50% 100%, 0 0, 100% 0);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .gr-marca-foto__punto {
+    transition: transform 0.15s ease-out;
+  }
+}
+
+/* MapLibre: alinear controles y popup con los tokens */
+.maplibregl-popup-content {
+  background: var(--gr-superficie);
+  color: var(--gr-tinta);
+  border: 1px solid var(--gr-linea-fuerte);
+  border-radius: 6px;
+  padding: 0.75rem;
+  font-family: Archivo, 'Segoe UI', system-ui, sans-serif;
+  box-shadow: 0 6px 20px rgb(15 25 34 / 18%);
+}
+.maplibregl-popup-tip { border-top-color: var(--gr-superficie); }
+.maplibregl-ctrl-attrib {
+  font-size: 10px;
+  background: color-mix(in srgb, var(--gr-superficie) 88%, transparent) !important;
+  color: var(--gr-tinta-2);
+}
+.maplibregl-ctrl-attrib a { color: var(--gr-azul-500); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
