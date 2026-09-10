@@ -329,6 +329,20 @@ texto además de color. Contrastes verificados en tema claro y oscuro.
 Los datos de OpenStreetMap son **ODbL**: cualquier publicación derivada debe
 atribuir y mantener la licencia. Las fotografías de Mapillary son **CC BY-SA
 4.0**: se pueden mostrar y reutilizar citando autoría y manteniendo la licencia,
-pero eso no permite incorporarlas a un producto cerrado sin más. Las capas del GADM Riobamba son de **uso
+pero eso no permite incorporarlas a un producto cerrado sin más.
+
+### Las capas del GADM están publicadas en este repositorio
+
+Este repositorio es **público**, así que los GeoJSON de plataformas, parroquias,
+barrios y equipamientos son descargables por cualquiera. Se publicaron por
+decisión expresa del responsable del proyecto. Quien los reutilice debería
+contrastarlos con el GADM Riobamba antes de darlos por vigentes: proceden de
+shapefiles de trabajo, no de una publicación oficial de datos abiertos, y el
+cotejo con OSM que hace el visor deja ver que tienen erratas (nombres repetidos,
+registros sin nombre, barrios partidos en dos piezas).
+
+El código no lleva archivo de licencia: sin uno, se aplica «todos los derechos
+reservados» por defecto. Si se quiere que otros puedan reutilizarlo, hay que
+añadir una licencia explícita. Las capas del GADM Riobamba son de **uso
 interno**; antes de cualquier despliegue público hay que revisar qué se expone y
 con qué autorización.
