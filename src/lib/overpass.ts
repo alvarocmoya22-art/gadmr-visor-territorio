@@ -35,7 +35,7 @@ export interface Resultado {
   desdeCache: boolean
 }
 
-const CLAVE_CACHE = 'gadmr.overpass.v1'
+const CLAVE_CACHE = 'gadmr.overpass.v2'
 const VIDA_CACHE_MS = 6 * 60 * 60 * 1000
 
 /** Etiquetas que se conservan; el resto se descarta para no inflar la caché. */
@@ -116,11 +116,27 @@ function normalizar(e: ElementoOverpass): Punto | null {
   }
 }
 
+/**
+ * El sello de la base OSM solo vale si es una fecha de verdad. Hay espejos que
+ * devuelven cosas como "34", y sin comprobarlo la cabecera llega a decir
+ * «Base OSM al 01 ene 2034».
+ */
+function selloValido(sello: string | undefined): string | null {
+  if (!sello) return null
+  const d = new Date(sello)
+  if (Number.isNaN(d.getTime())) return null
+  // Tampoco vale una fecha futura ni anterior al propio OpenStreetMap.
+  const ahora = Date.now()
+  if (d.getTime() > ahora + 86400000 || d.getFullYear() < 2004) return null
+  return sello
+}
+
 function leerCache(): Resultado | null {
   try {
     const bruto = localStorage.getItem(CLAVE_CACHE)
     if (!bruto) return null
     const guardado = JSON.parse(bruto) as Resultado
+    if (!guardado.puntos?.length) return null // cache inservible de un espejo fallido
     if (Date.now() - new Date(guardado.obtenido).getTime() > VIDA_CACHE_MS) return null
     // La frescura se recalcula: depende de la fecha de hoy, no de la descarga.
     guardado.puntos = guardado.puntos.map((p) => ({ ...p, frescura: frescuraDe(p.checkDate) }))
@@ -171,16 +187,26 @@ export async function obtenerPuntos(forzar = false): Promise<Resultado> {
         continue
       }
       const datos = (await resp.json()) as {
-        elements: ElementoOverpass[]
+        elements?: ElementoOverpass[]
         osm3s?: { timestamp_osm_base?: string }
       }
-      const puntos = datos.elements
+      const puntos = (datos.elements ?? [])
         .map(normalizar)
         .filter((p): p is Punto => p !== null)
 
+      // Un espejo puede responder 200 con la lista vacia y el sello corrupto:
+      // le pasa a overpass.osm.ch, que devuelve `timestamp_osm_base: "34"` y
+      // cero elementos. Riobamba tiene miles de puntos, asi que una respuesta
+      // vacia no es un dato, es un fallo: se pasa al siguiente espejo antes de
+      // dejar el tablero en blanco y, peor, guardarlo en cache seis horas.
+      if (puntos.length === 0) {
+        ultimoError = new Error(`${espejo} devolvió una respuesta vacía`)
+        continue
+      }
+
       const resultado: Resultado = {
         puntos,
-        selloOsm: datos.osm3s?.timestamp_osm_base ?? null,
+        selloOsm: selloValido(datos.osm3s?.timestamp_osm_base),
         obtenido: new Date().toISOString(),
         espejo,
         desdeCache: false,
