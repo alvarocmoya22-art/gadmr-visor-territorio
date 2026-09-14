@@ -8,6 +8,7 @@ import { aGeoJSON, type Punto } from '../lib/overpass'
 import { aGeoJSONEquipamientos, type CapasMunicipales, type EquipamientoMunicipal } from '../lib/municipal'
 import { urlTeselas as urlTeselasMapillary } from '../lib/mapillary'
 import { distanciaM } from '../lib/geo'
+import type { Calle } from '../lib/calles'
 
 export interface CapasVisibles {
   mapillary: boolean
@@ -37,6 +38,8 @@ interface Props {
   mapaBase: string
   /** Barrio filtrado, para resaltarlo y encuadrarlo. */
   barrioActivo: string | null
+  /** Calle buscada: el mapa la encuadra y la marca. */
+  calleElegida: Calle | null
 }
 
 const VACIO: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] }
@@ -165,12 +168,14 @@ export default function Mapa({
   fotoMostrada,
   mapaBase,
   barrioActivo,
+  calleElegida,
 }: Props) {
   const contenedor = useRef<HTMLDivElement>(null)
   const mapa = useRef<maplibregl.Map | null>(null)
   const [mapaListo, setMapaListo] = useState(false)
   const rotulos = useRef<maplibregl.Marker[]>([])
   const marcaFoto = useRef<maplibregl.Marker | null>(null)
+  const marcaCalle = useRef<maplibregl.Marker | null>(null)
   const cb = useRef({ onSeleccionar, onSeleccionarEquipamiento, onFotoMapillary, onFotoCercana, onCentro })
   cb.current = { onSeleccionar, onSeleccionarEquipamiento, onFotoMapillary, onFotoCercana, onCentro }
 
@@ -440,6 +445,8 @@ export default function Mapa({
       rotulos.current = []
       marcaFoto.current?.remove()
       marcaFoto.current = null
+      marcaCalle.current?.remove()
+      marcaCalle.current = null
       m.remove()
       mapa.current = null
       setMapaListo(false)
@@ -582,6 +589,37 @@ export default function Mapa({
       }
     })
   }, [plataformaActiva, capasMunicipales, mapaListo])
+
+  /**
+   * Calle buscada: se encuadra su envolvente y se marca su punto medio. No se
+   * dibuja su trazado porque el indice no lo guarda: la geometria completa de
+   * las 1.017 calles son 2 MB que no hacen falta para ubicarla.
+   */
+  useEffect(() => {
+    const m = mapa.current
+    if (!m || !mapaListo) return
+    if (!calleElegida) {
+      marcaCalle.current?.remove()
+      marcaCalle.current = null
+      return
+    }
+    const [o, s, e, n] = calleElegida.caja
+    m.fitBounds([o, s, e, n], {
+      padding: 60,
+      maxZoom: 17,
+      duration: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 700,
+    })
+    if (!marcaCalle.current) {
+      const el = document.createElement('div')
+      el.className = 'gr-marca-calle'
+      marcaCalle.current = new maplibregl.Marker({ element: el })
+        .setLngLat(calleElegida.centro)
+        .addTo(m)
+    } else {
+      marcaCalle.current.setLngLat(calleElegida.centro)
+    }
+    marcaCalle.current.getElement().title = calleElegida.nombre
+  }, [calleElegida, mapaListo])
 
   /**
    * Barrio filtrado: se rellena y el mapa se encuadra en el. El relleno solo

@@ -131,6 +131,38 @@ Antes de publicar el visor fuera de la red municipal hay que revisar la polític
 de uso de cada proveedor: la de OpenStreetMap, en particular, no admite tráfico
 alto.
 
+### Buscador de calles
+
+Escribir el nombre de una calle dice **por qué plataformas pasa**, encuadra el
+mapa en ella y marca su punto medio. Cada plataforma es un botón: pulsarlo
+filtra el tablero por ese sector.
+
+Se listan **todas** las plataformas que cruza, no una. De las 1.017 calles
+indexadas, **230 atraviesan dos o más**: decir que la Primera Constituyente «es
+de la K» sería falso, pasa por I, J, K, Q y Ñ. La Avenida 9 de Octubre toca
+cinco y Argentinos, seis.
+
+El índice lo genera `scripts/indexar_calles.py` y vive en
+`public/datos/calles.json` (156 KB). Se precalcula en vez de resolverlo en el
+navegador por dos razones: la geometría completa son 2 MB que nadie necesita
+para buscar un nombre, y el cruce calle-plataforma sale más fiable con
+intersección real de líneas y polígonos que aproximándolo en JavaScript. Como
+las calles de OSM cambian, conviene volver a correr el script cada cierto
+tiempo:
+
+```bash
+python scripts/indexar_calles.py
+```
+
+**Se descartan los nombres-marcador de OSM.** En el cantón hay 373 segmentos
+cuyo «nombre» es en realidad la ausencia de nombre: `Calle Sin Nombre` aparece
+155 veces, y hay `ub`, `calle urbana`, `no tiene nombre` o `no se puede
+responder`. No se filtra por longitud, ojo: en Riobamba hay calles reales que se
+llaman Cuba, Loja, Roma, Napo o Tena.
+
+198 calles quedan fuera de toda plataforma, porque las 18 cubren el área urbana
+y no el territorio rural; el buscador lo dice en vez de callarlo.
+
 ### Filtro por barrio
 
 Junto al de plataforma hay un **selector de barrio** que recorta igual los KPIs,

@@ -354,6 +354,45 @@ body {
   }
 }
 
+/* Marca de la calle buscada: chincheta sobre su punto medio */
+.gr-marca-calle {
+  position: relative;
+  width: 0;
+  height: 0;
+  cursor: help;
+}
+.gr-marca-calle::before {
+  content: '';
+  position: absolute;
+  left: -9px;
+  top: -9px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--gr-limite-barrio);
+  border: 3px solid #fff;
+  box-shadow: 0 1px 5px rgb(15 25 34 / 45%);
+}
+/* Anillo que late una vez al aparecer, para que se encuentre de un vistazo */
+.gr-marca-calle::after {
+  content: '';
+  position: absolute;
+  left: -9px;
+  top: -9px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid var(--gr-limite-barrio);
+  animation: gr-latido 1.6s ease-out 2;
+}
+@keyframes gr-latido {
+  from { transform: scale(1); opacity: 0.9; }
+  to { transform: scale(2.6); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gr-marca-calle::after { animation: none; }
+}
+
 /* MapLibre: alinear controles y popup con los tokens */
 .maplibregl-popup-content {
   background: var(--gr-superficie);

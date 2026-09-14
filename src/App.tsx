@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import Mapa, { type CapasVisibles } from './components/Mapa'
 import PanelKpis from './components/PanelKpis'
 import Filtros from './components/Filtros'
+import BuscadorCalles from './components/BuscadorCalles'
 import TablaPuntos from './components/TablaPuntos'
 import TablaPlataformas from './components/TablaPlataformas'
 import Ficha from './components/Ficha'
@@ -23,6 +24,7 @@ import { hayToken as hayTokenMapillary } from './lib/mapillary'
 import { fecha, numero } from './lib/format'
 import { useFotosCalle } from './hooks/useFotosCalle'
 import type { Foto } from './lib/mapillary'
+import type { Calle } from './lib/calles'
 
 type Tema = 'claro' | 'oscuro' | 'sistema'
 
@@ -55,6 +57,7 @@ export default function App() {
     null,
   )
   const [centro, setCentro] = useState<[number, number]>(VISTA_INICIAL.centro)
+  const [calleElegida, setCalleElegida] = useState<Calle | null>(null)
   const [mapaBase, setMapaBase] = useState(MAPA_BASE_INICIAL)
   const [tema, setTema] = useState<Tema>('sistema')
   const panel = useRef<HTMLElement>(null)
@@ -256,6 +259,7 @@ export default function App() {
             seleccionado={seleccionado}
             plataformaActiva={filtros.plataforma}
             barrioActivo={filtros.barrio}
+            calleElegida={calleElegida}
             mapaBase={mapaBase}
             capas={capas}
             onSeleccionar={elegirPunto}
@@ -275,6 +279,17 @@ export default function App() {
         </section>
 
         <aside ref={panel} className="space-y-3 lg:min-h-0 lg:overflow-auto" id="tabla">
+          <div
+            className="rounded p-3"
+            style={{ background: 'var(--gr-superficie)', border: '1px solid var(--gr-linea)' }}
+          >
+            <BuscadorCalles
+              elegida={calleElegida}
+              onElegir={setCalleElegida}
+              onIrAPlataforma={elegirPlataforma}
+            />
+          </div>
+
           <div
             className="rounded p-3"
             style={{ background: 'var(--gr-superficie)', border: '1px solid var(--gr-linea)' }}
