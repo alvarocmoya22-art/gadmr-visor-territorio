@@ -7,6 +7,8 @@ import json
 import geopandas as gpd
 
 ORIGEN = r"C:/Users/alvar/OneDrive/INFORMACION RIOBAMBA/PROYECTO PLATAFORMA/PLATAFORMAS"
+# Los barrios llegaron despues, actualizados y en su propia carpeta.
+ORIGEN_BARRIOS = r"C:/Users/alvar/OneDrive/Escritorio/default/gis_barrios_urb"
 DESTINO = r"C:/Users/alvar/OneDrive/Escritorio/default/gadmr-visor-territorio/public/datos"
 LOG = []
 
@@ -53,7 +55,7 @@ q = q.rename(columns={"Label": "nombre", "PARROQUIA": "clave", "AREA": "area_ha"
 escribir(q[["clave", "nombre", "area_ha", "geometry"]], "parroquias", 2)
 
 # --- Barrios
-b = gpd.read_file(f"{ORIGEN}/BARRIOS_CARGA.shp")
+b = gpd.read_file(f"{ORIGEN_BARRIOS}/barrios_urb_actualizado.shp")
 b = b.rename(columns={"Barrio": "nombre", "AREA_HA_": "area_ha", "NUMERO": "numero",
                       "BARRIOS_14": "catastro_2014"})
 b["nombre"] = b["nombre"].fillna("Sin nombre")

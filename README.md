@@ -48,14 +48,17 @@ primera consulta a OSM tarda entre 10 y 40 s; el resultado queda en caché local
 
 ## Las capas del GADM
 
-Origen: shapefiles en `INFORMACION RIOBAMBA/PROYECTO PLATAFORMA/PLATAFORMAS`,
-todos en EPSG:32717 (UTM 17S) y UTF-8 correcto.
+Origen: shapefiles del disco del GADM, todos en EPSG:32717 (UTM 17S) y UTF-8
+correcto. Plataformas, parroquias y equipamientos salen de
+`INFORMACION RIOBAMBA/PROYECTO PLATAFORMA/PLATAFORMAS`; los barrios, de
+`gis_barrios_urb`, que llegó después con la capa ya actualizada. Las rutas están
+al principio de `scripts/convertir_shapefiles.py`.
 
 | Capa | Registros | Papel en el tablero |
 |---|---|---|
 | Plataformas | 18 (A–Q más Ñ) | **Unidad de asignación de campo**: filtro, encuadre y avance por sector |
 | Parroquias urbanas | 5 | Contexto: Lizarzaburu, Velasco, Yaruquíes, Veloz, Maldonado |
-| Barrios | 197 polígonos, 190 barrios | Contexto y filtro, con el nombre rotulado sobre el mapa |
+| Barrios | 212 polígonos, 204 barrios | Contexto y filtro, con el nombre rotulado sobre el mapa |
 | Equipamientos | 291 | Inventario propio, contrastado punto a punto contra OSM |
 
 Se convierten con `scripts/convertir_shapefiles.py` (requiere `geopandas`), que
@@ -170,12 +173,62 @@ la cola de campo, el inventario y los conteos de la leyenda, resalta el barrio e
 el mapa y encuadra la vista en él. Elegir uno enciende la capa de barrios: filtrar
 por una zona que no se ve dibujada deja sin saber qué recorte se está mirando.
 
-**El shapefile trae 197 polígonos pero solo 190 barrios.** Nueve no tienen nombre
-y siete vienen partidos en dos piezas (TUBASEC, SAN JOSE DE TAPI, SANTA FAZ,
-BOLIVAR CHIRIBOGA, SANTA ROSA, LA MERCED, SAN FRANCISCO). Las piezas del mismo
-barrio se agrupan —filtrar por TUBASEC devuelve las dos— y a los anónimos se les
-pone su número (`Sin nombre (n.º 141)`) para que se puedan distinguir y filtrar.
-Sin eso, dos barrios distintos compartían identidad y el filtro los mezclaba.
+**El shapefile trae 212 polígonos pero solo 204 barrios.** Ocho no tienen nombre
+y ocho vienen partidos en dos piezas (24 DE MAYO, TUBASEC, SAN JOSE DE TAPI,
+SANTA FAZ, BOLIVAR CHIRIBOGA, SANTA ROSA, LA MERCED, SAN FRANCISCO). Las piezas
+del mismo barrio se agrupan —filtrar por TUBASEC devuelve las dos— y a los
+anónimos se les pone su número (`Sin nombre (n.º 141)`) para que se puedan
+distinguir y filtrar. Sin eso, dos barrios distintos compartían identidad y el
+filtro los mezclaba.
+
+La capa se actualizó el 2026-09-14 desde `gis_barrios_urb/barrios_urb_actualizado.shp`:
+entraron 17 barrios (COLINAS DEL SUR, EMANUEL 1 y 2, MARGASPAMBA, OROLOMA,
+ROSASPAMBA, SAN FRANCISCO DE MACAJÍ, VILLA LA UNIÓN, entre otros) y se
+corrigieron nombres —`COPERATIVA TIERRA NUEVA` pasó a `COOPERATIVA TIERRA
+NUEVA`—. El área total apenas varía, de 2.928,8 a 2.929,3 ha, así que el cambio
+es de detalle y nomenclatura, no de extensión.
+
+**Al cambiar los barrios hay que reindexar las calles**, porque el buscador
+guarda por qué barrios pasa cada una:
+
+```bash
+python scripts/convertir_shapefiles.py
+python scripts/indexar_calles.py
+```
+
+## Descargar lo que se ve
+
+Los dos botones de la cabecera exportan **el recorte activo**, no todo el
+cantón: lo que quede tras los filtros de plataforma, barrio, categoría, estado y
+búsqueda.
+
+| Formato | Para qué |
+|---|---|
+| **GeoJSON** | abrirlo en cualquier sitio, conserva el texto tal cual |
+| **Shapefile** | entregarlo a quien trabaja en QGIS o ArcGIS; sale en un ZIP |
+
+Campos exportados: `id`, `nombre`, `categoria`, `clase`, `frescura`,
+`check_date`, `completo` (porcentaje), `plataforma` y `barrio`. Están nombrados
+a mano y ninguno pasa de 10 caracteres, que es el máximo del DBF: si se dejara
+que la librería los recortara sola, `completitud` acabaría como `completitu`.
+
+2.459 puntos salen en un ZIP de 131 KB en una décima de segundo.
+
+### El DBF va en Latin-1, y el `.cpg` lo dice
+
+`@mapbox/shp-write` escribe el DBF en **Latin-1**, no en UTF-8, y no genera
+`.cpg`. El visor se lo añade declarando `ISO-8859-1`, que es la verdad.
+
+Esto se descubrió porque declarar `UTF-8` «porque toca» **rompía el archivo**:
+GDAL se creía la declaración, encontraba el byte `0xCD` de «MACAJÍ» y fallaba al
+abrirlo. Comprobado leyendo el shapefile generado con geopandas —que es lo que
+hay debajo de QGIS—: con `ISO-8859-1` abre limpio y `SAN FRANCISCO DE MACAJÍ`,
+`VILLA LA UNIÓN` y la plataforma `Ñ` se leen bien.
+
+La consecuencia a tener presente: un carácter fuera de Latin-1 no cabe en ese
+DBF. Para nombres en español no es problema, y si apareciera alguno el visor lo
+avisa por consola. **El GeoJSON no tiene esa limitación**: si el destino lo
+admite, es el formato más fiel.
 
 ## Vista de calle: Mapillary
 

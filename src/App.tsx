@@ -16,7 +16,7 @@ import {
   useTerritorio,
   type Filtros as FiltrosT,
 } from './hooks/usePuntos'
-import { aGeoJSON } from './lib/overpass'
+import { descargarGeoJSON, descargarShapefile } from './lib/exportar'
 import { avancePorPlataforma } from './lib/municipal'
 import { VISTA_INICIAL } from './config/riobamba'
 import { MAPA_BASE_INICIAL } from './config/mapasBase'
@@ -151,15 +151,21 @@ export default function App() {
     setEquipSeleccionadoId(id)
   }
 
-  const descargarGeoJSON = () => {
-    const blob = new Blob([JSON.stringify(aGeoJSON(filtrados), null, 1)], {
-      type: 'application/geo+json',
-    })
-    const a = document.createElement('a')
-    a.href = URL.createObjectURL(blob)
-    a.download = `riobamba-levantamiento-${new Date().toISOString().slice(0, 10)}.geojson`
-    a.click()
-    URL.revokeObjectURL(a.href)
+  const [exportando, setExportando] = useState(false)
+  const [errorExportar, setErrorExportar] = useState<string | null>(null)
+
+  // El shapefile se arma en el navegador y con miles de puntos tarda un poco,
+  // asi que el boton avisa mientras trabaja en vez de parecer que no responde.
+  const exportarShapefile = async () => {
+    setExportando(true)
+    setErrorExportar(null)
+    try {
+      await descargarShapefile(filtrados)
+    } catch (e) {
+      setErrorExportar(e instanceof Error ? e.message : String(e))
+    } finally {
+      setExportando(false)
+    }
   }
 
   const campo = {
@@ -209,14 +215,29 @@ export default function App() {
           </select>
         </label>
 
-        <button
-          type="button"
-          className="gr-btn gr-btn--secundario"
-          onClick={descargarGeoJSON}
-          disabled={!datos}
-        >
-          Descargar GeoJSON
-        </button>
+        <span className="flex items-center gap-1.5">
+          <span className="text-[11px]" style={{ color: 'var(--gr-tinta-3)' }}>
+            Descargar
+          </span>
+          <button
+            type="button"
+            className="gr-btn gr-btn--secundario"
+            onClick={() => descargarGeoJSON(filtrados)}
+            disabled={!datos || filtrados.length === 0}
+            title="Lo que se ve ahora, en GeoJSON"
+          >
+            GeoJSON
+          </button>
+          <button
+            type="button"
+            className="gr-btn gr-btn--secundario"
+            onClick={exportarShapefile}
+            disabled={!datos || filtrados.length === 0 || exportando}
+            title="Lo que se ve ahora, como shapefile comprimido"
+          >
+            {exportando ? 'Armando…' : 'Shapefile'}
+          </button>
+        </span>
         <button type="button" className="gr-btn" onClick={recargar} disabled={estado === 'cargando'}>
           {estado === 'cargando' ? 'Consultando…' : 'Actualizar desde OSM'}
         </button>
@@ -235,6 +256,14 @@ export default function App() {
         <div className="px-4 pt-3">
           <p className="gr-nota gr-nota--alerta" role="alert">
             {error}
+          </p>
+        </div>
+      )}
+
+      {errorExportar && (
+        <div className="px-4 pt-3">
+          <p className="gr-nota gr-nota--alerta" role="alert">
+            No se pudo generar el shapefile: {errorExportar}
           </p>
         </div>
       )}
