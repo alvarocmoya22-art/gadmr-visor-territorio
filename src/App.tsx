@@ -260,6 +260,21 @@ export default function App() {
         </div>
       )}
 
+      {/* Si la base que respondio viene atrasada, las cifras no son las de hoy
+          y hay que decirlo: si no, el mismo tablero da numeros distintos segun
+          que espejo conteste y nadie sabe por que. */}
+      {datos && (datos.diasDeRetraso ?? 0) > 3 && (
+        <div className="px-4 pt-3">
+          <p className="gr-nota gr-nota--aviso">
+            Los datos vienen de una copia de OpenStreetMap con{' '}
+            <b>{numero(datos.diasDeRetraso ?? 0)} días de retraso</b> (base al{' '}
+            {fecha(datos.selloOsm ?? undefined)}). Ningún espejo respondió con la base al día, así
+            que se usó el menos atrasado. Lo levantado en campo estos días puede no aparecer
+            todavía: pulse «Actualizar desde OSM» más tarde.
+          </p>
+        </div>
+      )}
+
       {errorExportar && (
         <div className="px-4 pt-3">
           <p className="gr-nota gr-nota--alerta" role="alert">
@@ -362,7 +377,7 @@ export default function App() {
 
           {avance.length > 0 && (
             <div>
-              <p className="gr-eyebrow mb-1.5">Avance por plataforma</p>
+              <p className="gr-eyebrow mb-1.5">Registros por plataforma</p>
               <TablaPlataformas
                 avance={avance}
                 activa={filtros.plataforma}
@@ -420,7 +435,12 @@ export default function App() {
           )}
 
           <div>
-            <p className="gr-eyebrow mb-1.5">Cola de campo · {numero(filtrados.length)} puntos</p>
+            {/* Dice cuantos faltan sobre el total: «57 puntos» a secas se leia
+                como si la cola fuera todo lo que hay en el sector. */}
+            <p className="gr-eyebrow mb-1.5">
+              Cola de campo · {numero(resumen.pendientes)} pendientes de{' '}
+              {numero(filtrados.length)} registros
+            </p>
             <TablaPuntos
               puntos={filtrados}
               seleccionadoId={seleccionadoId}

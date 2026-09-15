@@ -108,6 +108,50 @@ centroide, que puede quedar a más de 50 m del punto municipal. Por eso la ESPOC
 y varios parques salen como «ausentes» sin estarlo necesariamente. Cotejar contra
 la geometría del polígono, y no contra su centroide, corregiría la mayor parte.
 
+## Las tres cifras que no hay que confundir
+
+El tablero distingue tres cosas que se parecen y no son lo mismo. Se separaron
+porque se leían al revés: «Capas temáticas» parecía la lista de lo que faltaba,
+cuando era justo lo contrario.
+
+| Cifra | Qué es | Dónde |
+|---|---|---|
+| **Registros** | lo que ya existe en OpenStreetMap dentro del ámbito | KPI «Registros en vista» y columna *Registros* |
+| **Levantados** | de esos, los confirmados en campo con Every Door (llevan `check_date`) | KPI «Levantados en campo» y columna *Levantados* |
+| **Faltan** | el resto: sin `check_date` o vencido | KPI «Faltan por levantar» y columna *Faltan* |
+
+A esas tres se suma una cuarta, de otra fuente: **Equip.**, los equipamientos
+del inventario municipal que aún no se confirman contra OSM.
+
+La tabla «Registros por plataforma» las muestra juntas, con fila de totales, de
+modo que se pueda comparar las 18 de un vistazo.
+
+## Los espejos de Overpass no van sincronizados
+
+Esto causó el problema más difícil de ver de todo el proyecto: **la misma
+plataforma mostraba 437 registros con 82,8 % levantado y al rato 57 con 0 %**.
+
+No era el tablero: era qué espejo respondía.
+
+| Espejo | Base OSM observada |
+|---|---|
+| overpass-api.de | la del día |
+| overpass.kumi.systems | llegó a ir **tres meses atrasada** |
+| overpass.osm.ch | roto: responde `200` con lista vacía y sello `"34"` |
+
+El visor se quedaba con el primero que contestara. Si contestaba el atrasado, se
+veía un Riobamba de tres meses antes —menos puntos y casi ningún `check_date`—
+sin que nada lo indicara.
+
+Ahora **recorre los espejos y se queda con el de la base más reciente**: acepta
+el primero solo si viene con menos de 3 días de retraso, y si ninguno lo está usa
+el menos atrasado **y lo avisa en pantalla**, diciendo cuántos días trae. Es
+preferible una cifra vieja señalada como vieja que una cifra vieja disfrazada de
+actual.
+
+Por eso la cabecera muestra siempre la fecha de la base OSM que respondió: no es
+un adorno, es lo que permite saber si dos personas están mirando lo mismo.
+
 ## Mapas base y filtro por barrio
 
 El panel permite cambiar el **mapa base** entre cuatro fondos, todos con teselas

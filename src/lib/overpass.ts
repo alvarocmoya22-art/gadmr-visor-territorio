@@ -33,6 +33,8 @@ export interface Resultado {
   obtenido: string
   espejo: string
   desdeCache: boolean
+  /** Días de retraso de la base OSM respecto a hoy; null si no se sabe. */
+  diasDeRetraso: number | null
 }
 
 const CLAVE_CACHE = 'gadmr.overpass.v2'
@@ -117,6 +119,21 @@ function normalizar(e: ElementoOverpass): Punto | null {
 }
 
 /**
+ * Un espejo con la base mas atrasada que esto se considera aceptable solo si
+ * no hay nada mejor. Con tres dias se tolera el retraso normal de replicacion
+ * sin tragarse una base de hace meses.
+ */
+const DIAS_TOLERADOS = 3
+
+/** Dias entre el sello de la base y hoy. */
+function retrasoEnDias(sello: string | null): number | null {
+  if (!sello) return null
+  const t = new Date(sello).getTime()
+  if (Number.isNaN(t)) return null
+  return Math.max(0, Math.round((Date.now() - t) / 86400000))
+}
+
+/**
  * El sello de la base OSM solo vale si es una fecha de verdad. Hay espejos que
  * devuelven cosas como "34", y sin comprobarlo la cabecera llega a decir
  * «Base OSM al 01 ene 2034».
@@ -140,6 +157,7 @@ function leerCache(): Resultado | null {
     if (Date.now() - new Date(guardado.obtenido).getTime() > VIDA_CACHE_MS) return null
     // La frescura se recalcula: depende de la fecha de hoy, no de la descarga.
     guardado.puntos = guardado.puntos.map((p) => ({ ...p, frescura: frescuraDe(p.checkDate) }))
+    guardado.diasDeRetraso = retrasoEnDias(guardado.selloOsm)
     return { ...guardado, desdeCache: true }
   } catch {
     return null
@@ -174,6 +192,8 @@ export async function obtenerPuntos(forzar = false): Promise<Resultado> {
 
   const consulta = construirConsulta()
   let ultimoError: unknown = null
+  /** El mejor resultado hasta ahora, si ninguno viene al dia. */
+  let mejor: Resultado | null = null
 
   for (const espejo of ESPEJOS_OVERPASS) {
     try {
@@ -204,18 +224,36 @@ export async function obtenerPuntos(forzar = false): Promise<Resultado> {
         continue
       }
 
+      const sello = selloValido(datos.osm3s?.timestamp_osm_base)
+      const retraso = retrasoEnDias(sello)
       const resultado: Resultado = {
         puntos,
-        selloOsm: selloValido(datos.osm3s?.timestamp_osm_base),
+        selloOsm: sello,
         obtenido: new Date().toISOString(),
         espejo,
         desdeCache: false,
+        diasDeRetraso: retraso,
       }
-      escribirCache(resultado)
-      return resultado
+
+      // Si la base esta al dia, no hace falta seguir preguntando.
+      if (retraso !== null && retraso <= DIAS_TOLERADOS) {
+        escribirCache(resultado)
+        return resultado
+      }
+      // Si no, se guarda como candidato y se prueba el siguiente espejo: puede
+      // haber uno con la base mas reciente.
+      if (!mejor || (retraso ?? Infinity) < (mejor.diasDeRetraso ?? Infinity)) {
+        mejor = resultado
+      }
     } catch (e) {
       ultimoError = e
     }
+  }
+
+  // Ninguno estaba al dia: se usa el menos atrasado y el visor lo dice.
+  if (mejor) {
+    escribirCache(mejor)
+    return mejor
   }
 
   const cache = leerCache()

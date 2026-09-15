@@ -172,10 +172,15 @@ export default function Filtros({
       </div>
 
       <div>
-        {/* El ambito va en el rotulo: sin el, 222 y 30 se leen igual de total. */}
+        {/* El ambito va en el rotulo: sin el, 222 y 30 se leen igual de total.
+            Y dice «registrados» porque se leia al reves, como si fueran los
+            que faltan: son los que YA estan en OpenStreetMap. */}
         <p className="gr-eyebrow mb-1.5">
-          Capas tematicas{filtros.plataforma ? ` · plataforma ${filtros.plataforma}` : ''}
+          Registrados por categoria{filtros.plataforma ? ` · plataforma ${filtros.plataforma}` : ''}
           {filtros.barrio ? ` · ${filtros.barrio}` : ''}
+        </p>
+        <p className="mb-1.5 text-[11px]" style={{ color: 'var(--gr-tinta-3)' }}>
+          Lo que ya existe en OpenStreetMap; suman el total en vista. Pulse una para filtrar.
         </p>
         <ul className="space-y-0.5">
           {CATEGORIAS.map((c) => {

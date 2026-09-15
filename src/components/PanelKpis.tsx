@@ -52,19 +52,23 @@ export default function PanelKpis({
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">
         <Kpi
           valor={numero(resumen.total)}
-          rotulo="Puntos en vista"
-          pie={filtrado ? `de ${numero(totalCanton)} en el canton` : 'todo el canton'}
+          rotulo="Registros en vista"
+          pie={
+            filtrado
+              ? `ya en OpenStreetMap · de ${numero(totalCanton)} en el canton`
+              : 'ya en OpenStreetMap · todo el canton'
+          }
         />
         <Kpi
-          valor={porcentaje(pctVerificado)}
-          rotulo="Verificados en campo"
-          pie={`${numero(resumen.verificados)} con check_date de 12 meses o menos`}
+          valor={numero(resumen.verificados)}
+          rotulo="Levantados en campo"
+          pie={`${porcentaje(pctVerificado)} de los registros · con check_date de 12 meses o menos`}
           tono={pctVerificado >= 60 ? 'ok' : pctVerificado >= 25 ? 'aviso' : 'error'}
         />
         <Kpi
           valor={numero(resumen.pendientes)}
-          rotulo="Cola de campo"
-          pie="sin verificar o verificacion vencida"
+          rotulo="Faltan por levantar"
+          pie="de los registros en vista, sin check_date o vencido"
           tono={resumen.pendientes > 0 ? 'aviso' : 'ok'}
         />
         <Kpi
