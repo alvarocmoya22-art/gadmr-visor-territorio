@@ -38,6 +38,7 @@ type Tema = 'claro' | 'oscuro' | 'sistema'
 type ClavePestana = 'filtros' | 'analisis' | 'datos' | 'calle'
 
 const CAPAS_INICIALES: CapasVisibles = {
+  osm: true,
   mapillary: hayTokenMapillary,
   plataformas: true,
   parroquias: false,

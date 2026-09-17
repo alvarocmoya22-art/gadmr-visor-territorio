@@ -27,6 +27,8 @@ export interface CruceMapa {
 }
 
 export interface CapasVisibles {
+  /** Los registros de OpenStreetMap: el dato principal del visor. */
+  osm: boolean
   mapillary: boolean
   plataformas: boolean
   parroquias: boolean
@@ -746,6 +748,10 @@ export default function Mapa({
       const poner = (capa: string, visible: boolean) => {
         if (m.getLayer(capa)) m.setLayoutProperty(capa, 'visibility', visible ? 'visible' : 'none')
       }
+      // El halo del punto elegido y el anillo del cruce cuelgan de los
+      // puntos: apagarlos y dejar sus adornos flotando no tendria sentido.
+      poner('pois', capas.osm)
+      poner('pois-halo', capas.osm)
       poner('mly-secuencias', capas.mapillary)
       poner('mly-fotos', capas.mapillary)
       poner('plataformas-relleno', capas.plataformas)
@@ -762,7 +768,7 @@ export default function Mapa({
       poner('calor-equipamientos', mapaCalor === 'equipamientos')
       poner('deficit-relleno', deficit !== null)
       poner('deficit-linea', deficit !== null)
-      poner('cruce-alerta', cruce !== null)
+      poner('cruce-alerta', cruce !== null && capas.osm)
 
       /*
        * Opacidad de los puntos. Son tres situaciones y una sola propiedad:

@@ -22,6 +22,7 @@ interface Props {
 }
 
 const CAPAS: { clave: keyof CapasVisibles; rotulo: string }[] = [
+  { clave: 'osm', rotulo: 'Registros de OpenStreetMap' },
   { clave: 'plataformas', rotulo: 'Plataformas' },
   { clave: 'parroquias', rotulo: 'Parroquias urbanas' },
   { clave: 'barrios', rotulo: 'Barrios' },
