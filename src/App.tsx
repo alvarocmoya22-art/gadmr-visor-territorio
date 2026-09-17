@@ -29,6 +29,7 @@ import { MAPA_BASE_INICIAL } from './config/mapasBase'
 import { hayToken as hayTokenMapillary } from './lib/mapillary'
 import { fecha, numero } from './lib/format'
 import { useFotosCalle } from './hooks/useFotosCalle'
+import { recargarDeVerdad, useVersionNueva } from './hooks/useVersion'
 import type { Foto } from './lib/mapillary'
 import type { Calle } from './lib/calles'
 
@@ -73,6 +74,7 @@ export default function App() {
   const [analisis, setAnalisis] = useState<EstadoAnalisis>(ANALISIS_INICIAL)
   const [tema, setTema] = useState<Tema>('sistema')
   const [pestana, setPestana] = useState<ClavePestana>('filtros')
+  const hayVersionNueva = useVersionNueva()
   const panel = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -390,6 +392,20 @@ export default function App() {
           }
         />
       </div>
+
+      {/* GitHub Pages cachea el index.html diez minutos y no deja cambiarlo.
+          Sin este aviso, quien abra el visor justo después de publicar algo ve
+          la versión anterior y cree que el cambio no se hizo. */}
+      {hayVersionNueva && (
+        <div className="px-4 pt-3">
+          <p className="gr-nota gr-nota--novedad flex flex-wrap items-center gap-3">
+            <span>Hay una versión más nueva del visor publicada.</span>
+            <button type="button" className="gr-btn" onClick={recargarDeVerdad}>
+              Actualizar ahora
+            </button>
+          </p>
+        </div>
+      )}
 
       {estado === 'error' && (
         <div className="px-4 pt-3">

@@ -194,6 +194,22 @@ body {
   .gr-nota--aviso { border-left-color: var(--gr-aviso); }
   .gr-nota--alerta { border-left-color: var(--gr-error); }
 
+  /*
+   * Novedad publicada. Va en verde y mas grande que el resto de notas a
+   * proposito: no es un problema del que avisar, es algo que hay que pulsar, y
+   * compite con una nota ambar (la base de OSM atrasada) que puede estar
+   * justo al lado. Mismo color, mismo tamano, y ninguna de las dos se ve.
+   */
+  .gr-nota--novedad {
+    border-left-width: 5px;
+    border-left-color: var(--gr-ok);
+    background: color-mix(in srgb, var(--gr-ok) 12%, var(--gr-superficie));
+    padding: 0.875rem 1rem;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: var(--gr-tinta);
+  }
+
   .gr-tabla {
     width: 100%;
     border-collapse: collapse;
