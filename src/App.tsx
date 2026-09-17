@@ -172,6 +172,36 @@ export default function App() {
     [ambito, equipAmbito, analisis.hallazgos],
   )
 
+  /**
+   * Como se llama y que es el territorio en vista. El titulo va sobre los KPI
+   * y el detalle lo situa: sin la superficie, «Plataforma D» no dice si son
+   * doscientas hectareas o dos mil.
+   */
+  const plataformaSel = capasMun?.plataformas.find((p) => p.clave === filtros.plataforma) ?? null
+  const barrioSel = barriosAmbito.find((b) => b.nombre === filtros.barrio) ?? null
+
+  const zonaTitulo =
+    filtros.plataforma === URBANO
+      ? 'Riobamba urbano'
+      : plataformaSel
+        ? `Plataforma ${plataformaSel.clave}`
+        : 'Todo el cantón'
+  const ambitoTitulo = barrioSel ? `${zonaTitulo} · ${barrioSel.nombre}` : zonaTitulo
+
+  const ha = (n: number) => `${numero(Math.round(n))} ha`
+  const ambitoDetalle = barrioSel
+    ? // La plataforma solo se nombra si el titulo no la lleva ya delante.
+      plataformaSel
+      ? ha(barrioSel.areaHa)
+      : `${ha(barrioSel.areaHa)} · ${
+          barrioSel.plataforma ? `plataforma ${barrioSel.plataforma}` : 'fuera de plataforma'
+        }`
+    : plataformaSel
+      ? `${ha(plataformaSel.areaHa)} · ${numero(barriosAmbito.length)} barrios`
+      : filtros.plataforma === URBANO
+        ? `${numero(capasMun?.plataformas.length ?? 0)} plataformas · ${numero(barriosAmbito.length)} barrios`
+        : `urbano y rural · ${numero(barriosAmbito.length)} barrios`
+
   const ambitoRotulo = (() => {
     const zona =
       filtros.plataforma === URBANO
@@ -349,6 +379,15 @@ export default function App() {
           totalCanton={todos.length}
           equipamientos={equipFiltrados.length}
           equipPorVerificar={porVerificar.length}
+          ambito={ambitoTitulo}
+          ambitoDetalle={ambitoDetalle}
+          // Se vuelve al ambito de partida, no a todo el canton: el visor abre
+          // en el urbano y ahi es donde se espera regresar.
+          onQuitarFiltro={
+            filtros.plataforma === URBANO && !filtros.barrio
+              ? null
+              : () => cambiarFiltros({ ...filtros, plataforma: URBANO, barrio: null })
+          }
         />
       </div>
 
