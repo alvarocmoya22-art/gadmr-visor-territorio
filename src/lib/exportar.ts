@@ -59,6 +59,15 @@ function descargar(contenido: Blob, nombre: string) {
 
 const hoy = () => new Date().toISOString().slice(0, 10)
 
+/**
+ * CSV con BOM. Sin el, Excel en Windows abre el archivo en la codificacion del
+ * sistema y «MACAJI» llega roto; con el, lo reconoce como UTF-8 y respeta las
+ * tildes, que es como sale el nombre de casi todos los barrios.
+ */
+export function descargarCsv(texto: string, nombre: string) {
+  descargar(new Blob(['\ufeff' + texto], { type: 'text/csv;charset=utf-8' }), nombre)
+}
+
 export function descargarGeoJSON(puntos: Punto[]) {
   const blob = new Blob([JSON.stringify(aColeccion(puntos), null, 1)], {
     type: 'application/geo+json',

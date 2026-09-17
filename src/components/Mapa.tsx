@@ -3,12 +3,23 @@ import maplibregl, { type ExpressionSpecification, type StyleSpecification } fro
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { VISTA_INICIAL } from '../config/riobamba'
 import { capaDe, MAPAS_BASE, MAPA_BASE_INICIAL } from '../config/mapasBase'
-import { CATEGORIAS, paletaResuelta } from '../lib/categorias'
+import { CATEGORIAS, paletaResuelta, type ClaveCategoria } from '../lib/categorias'
 import { aGeoJSON, type Punto } from '../lib/overpass'
 import { aGeoJSONEquipamientos, type CapasMunicipales, type EquipamientoMunicipal } from '../lib/municipal'
 import { urlTeselas as urlTeselasMapillary } from '../lib/mapillary'
 import { distanciaM } from '../lib/geo'
 import type { Calle } from '../lib/calles'
+
+/** Qué densidad se dibuja como mapa de calor. */
+export type MapaCalor = 'ninguno' | 'registros' | 'pendientes' | 'equipamientos'
+
+/** Cruce de dos categorías, tal como lo necesita el mapa para resaltarlo. */
+export interface CruceMapa {
+  a: ClaveCategoria
+  b: ClaveCategoria
+  /** Ids de los puntos de A sin ningún B dentro del umbral. */
+  desatendidos: string[]
+}
 
 export interface CapasVisibles {
   mapillary: boolean
@@ -38,11 +49,64 @@ interface Props {
   mapaBase: string
   /** Barrio filtrado, para resaltarlo y encuadrarlo. */
   barrioActivo: string | null
+  /** Mapa de calor activo; se alimenta de las capas ya filtradas. */
+  mapaCalor: MapaCalor
+  /** Coropleta de distancia al equipamiento más cercano; null para no dibujarla. */
+  deficit: GeoJSON.FeatureCollection | null
+  /** Cruce activo de dos categorías; null cuando no hay ninguno. */
+  cruce: CruceMapa | null
+  /** Pinchar un barrio de la coropleta lo pone en el filtro. */
+  onElegirBarrio: (nombre: string) => void
   /** Calle buscada: el mapa la encuadra y la marca. */
   calleElegida: Calle | null
 }
 
 const VACIO: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] }
+
+/**
+ * Rampa del mapa de calor: la secuencial del sistema GADM, con el extremo bajo
+ * transparente para que el mapa base siga leyendose donde no hay densidad.
+ * Un mapa de calor opaco tapa justo el contexto que da sentido a la mancha.
+ */
+const RAMPA_CALOR = [
+  'interpolate', ['linear'], ['heatmap-density'],
+  0, 'rgba(220,233,244,0)',
+  0.2, 'rgba(179,207,231,0.55)',
+  0.4, 'rgba(127,174,214,0.7)',
+  0.6, 'rgba(74,136,190,0.8)',
+  0.8, 'rgba(31,95,148,0.88)',
+  1, 'rgba(10,56,96,0.95)',
+] as unknown as ExpressionSpecification
+
+/**
+ * Rampa del calor de lo pendiente. Va en cálidos a propósito: el azul dice
+ * «aquí hay cosas» y este tiene que decir «aquí falta trabajo», que no es lo
+ * mismo y no debe leerse igual de un vistazo.
+ */
+const RAMPA_PENDIENTES = [
+  'interpolate', ['linear'], ['heatmap-density'],
+  0, 'rgba(255,241,214,0)',
+  0.2, 'rgba(250,214,140,0.55)',
+  0.4, 'rgba(240,166,74,0.72)',
+  0.6, 'rgba(219,108,44,0.82)',
+  0.8, 'rgba(178,58,30,0.9)',
+  1, 'rgba(120,28,18,0.95)',
+] as unknown as ExpressionSpecification
+
+/**
+ * Escala del déficit, en metros al equipamiento más cercano. Cinco tramos de
+ * la secuencial del sistema; los cortes van cada 250 m porque es la distancia
+ * que se anda en tres minutos y hace de unidad legible a pie.
+ */
+const COLORES_DEFICIT = ['#dce9f4', '#b3cfe7', '#7faed6', '#4a88be', '#1f5f94']
+const ESCALA_DEFICIT = [
+  'step', ['get', 'distancia'],
+  COLORES_DEFICIT[0],
+  250, COLORES_DEFICIT[1],
+  500, COLORES_DEFICIT[2],
+  750, COLORES_DEFICIT[3],
+  1000, COLORES_DEFICIT[4],
+] as unknown as ExpressionSpecification
 
 /** Color de la capa de fotografia de calle; en la leyenda va rotulada. */
 const COLOR_MAPILLARY = '#7f8c14'
@@ -169,6 +233,10 @@ export default function Mapa({
   mapaBase,
   barrioActivo,
   calleElegida,
+  mapaCalor,
+  deficit,
+  cruce,
+  onElegirBarrio,
 }: Props) {
   const contenedor = useRef<HTMLDivElement>(null)
   const mapa = useRef<maplibregl.Map | null>(null)
@@ -176,8 +244,8 @@ export default function Mapa({
   const rotulos = useRef<maplibregl.Marker[]>([])
   const marcaFoto = useRef<maplibregl.Marker | null>(null)
   const marcaCalle = useRef<maplibregl.Marker | null>(null)
-  const cb = useRef({ onSeleccionar, onSeleccionarEquipamiento, onFotoMapillary, onFotoCercana, onCentro })
-  cb.current = { onSeleccionar, onSeleccionarEquipamiento, onFotoMapillary, onFotoCercana, onCentro }
+  const cb = useRef({ onSeleccionar, onSeleccionarEquipamiento, onFotoMapillary, onFotoCercana, onCentro, onElegirBarrio })
+  cb.current = { onSeleccionar, onSeleccionarEquipamiento, onFotoMapillary, onFotoCercana, onCentro, onElegirBarrio }
 
   /**
    * Ejecuta `fn` solo con el mapa ya cargado. `mapaListo` es estado, no ref, a
@@ -218,6 +286,25 @@ export default function Mapa({
       const azul = raiz.getPropertyValue('--gr-info').trim()
       const tinta3 = raiz.getPropertyValue('--gr-tinta-3').trim()
       const limiteBarrio = raiz.getPropertyValue('--gr-limite-barrio').trim()
+
+      // ── Déficit de equipamiento por barrio. Se declara la primera para
+      // que quede por debajo de los límites y de los puntos: es un fondo que
+      // colorea el territorio, no una capa que deba taparlo.
+      m.addSource('deficit', { type: 'geojson', data: VACIO })
+      m.addLayer({
+        id: 'deficit-relleno',
+        type: 'fill',
+        source: 'deficit',
+        layout: { visibility: 'none' },
+        paint: { 'fill-color': ESCALA_DEFICIT, 'fill-opacity': 0.72 },
+      })
+      m.addLayer({
+        id: 'deficit-linea',
+        type: 'line',
+        source: 'deficit',
+        layout: { visibility: 'none' },
+        paint: { 'line-color': '#ffffff', 'line-width': 1, 'line-opacity': 0.8 },
+      })
 
       // ── Límites municipales, de más grande a más pequeño
       m.addSource('barrios', { type: 'geojson', data: VACIO })
@@ -407,6 +494,93 @@ export default function Mapa({
         },
       })
 
+      // ── Mapas de calor. Se alimentan de las mismas fuentes que los
+      // puntos, asi que respetan los filtros sin ningun trabajo extra.
+      // Van debajo de 'pois-halo' para que la mancha no tape los puntos.
+      const calor = (
+        id: string,
+        fuente: string,
+      ): maplibregl.HeatmapLayerSpecification => ({
+        id,
+        type: 'heatmap',
+        source: fuente,
+        layout: { visibility: 'none' },
+        paint: {
+          'heatmap-weight': 1,
+          // Con pocos puntos hace falta más intensidad para que se vea algo.
+          'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 11, 1, 16, 3],
+          'heatmap-color': RAMPA_CALOR,
+          // El radio crece con el zoom: si no, al acercarse la mancha se
+          // deshace en puntitos y deja de leerse como densidad.
+          'heatmap-radius': ['interpolate', ['linear'], ['zoom'], 11, 14, 14, 26, 18, 55],
+          'heatmap-opacity': ['interpolate', ['linear'], ['zoom'], 11, 0.85, 18, 0.55],
+        },
+      })
+      m.addLayer(calor('calor-registros', 'pois'), 'pois-halo')
+      m.addLayer(calor('calor-equipamientos', 'equipamientos'), 'pois-halo')
+      // El de pendientes es el mismo calor con otro peso: solo suman los
+      // registros sin verificar o con la verificación vencida.
+      const pendientes = calor('calor-pendientes', 'pois')
+      pendientes.paint = {
+        ...pendientes.paint,
+        'heatmap-weight': [
+          'case',
+          ['in', ['get', 'frescura'], ['literal', ['sin_verificar', 'vencido']]],
+          1,
+          0,
+        ] as unknown as ExpressionSpecification,
+        'heatmap-color': RAMPA_PENDIENTES,
+      }
+      m.addLayer(pendientes, 'pois-halo')
+
+      // ── Cruce de categorías: anillo sobre los puntos de A que se quedan
+      // fuera del umbral. Va encima de los puntos para que no lo tapen.
+      m.addLayer({
+        id: 'cruce-alerta',
+        type: 'circle',
+        source: 'pois',
+        filter: ['in', ['get', 'id'], ['literal', []]],
+        layout: { visibility: 'none' },
+        paint: {
+          'circle-radius': ['interpolate', ['linear'], ['zoom'], 11, 6, 14, 9, 18, 15],
+          'circle-color': 'rgba(0,0,0,0)',
+          'circle-stroke-width': 2,
+          'circle-stroke-color': '#b23a1e',
+        },
+      })
+
+      // La coropleta se explica sola al pasar por encima: un color sin cifra
+      // no dice cuántos metros son, y ese es justo el dato que se busca.
+      const globo = new maplibregl.Popup({ closeButton: false, closeOnClick: false })
+      m.on('mousemove', 'deficit-relleno', (e) => {
+        const f = e.features?.[0]
+        if (!f) return
+        m.getCanvas().style.cursor = 'pointer'
+        const d = Number(f.properties?.distancia ?? 0)
+        const n = Number(f.properties?.equipamientos ?? 0)
+        globo
+          .setLngLat(e.lngLat)
+          .setHTML(
+            `<b>${String(f.properties?.nombre ?? '')}</b><br>` +
+              `${n === 0 ? 'sin equipamiento propio' : `${n} equipamiento${n > 1 ? 's' : ''}`}<br>` +
+              `${d >= 99999 ? 'ninguno a la vista' : `${d} m al más cercano`}`,
+          )
+          .addTo(m)
+      })
+      m.on('mouseleave', 'deficit-relleno', () => {
+        m.getCanvas().style.cursor = ''
+        globo.remove()
+      })
+      m.on('click', 'deficit-relleno', (e) => {
+        // La coropleta ocupa todo el fondo, asi que un clic sobre un punto cae
+        // tambien sobre ella. Manda el punto: si no, pinchar una ficha
+        // cambiaria ademas el filtro de barrio sin haberlo pedido.
+        const encima = ['pois', 'equipamientos', 'mly-fotos'].filter((c) => m.getLayer(c))
+        if (m.queryRenderedFeatures(e.point, { layers: encima }).length > 0) return
+        const f = e.features?.[0]
+        if (f) cb.current.onElegirBarrio(String(f.properties?.nombre ?? ''))
+      })
+
       m.on('click', 'pois', (e) => {
         const f = e.features?.[0]
         if (f) cb.current.onSeleccionar(String(f.properties?.id ?? ''))
@@ -524,6 +698,25 @@ export default function Mapa({
     })
   }, [equipamientos, mapaListo])
 
+  // Coropleta del déficit: se recalcula fuera y aquí solo se dibuja.
+  useEffect(() => {
+    cuandoListo((m) => {
+      ;(m.getSource('deficit') as maplibregl.GeoJSONSource | undefined)?.setData(deficit ?? VACIO)
+    })
+  }, [deficit, mapaListo])
+
+  // Puntos de A que quedan fuera del umbral del cruce.
+  useEffect(() => {
+    cuandoListo((m) => {
+      if (!m.getLayer('cruce-alerta')) return
+      m.setFilter('cruce-alerta', [
+        'in',
+        ['get', 'id'],
+        ['literal', cruce?.desatendidos ?? []],
+      ] as unknown as ExpressionSpecification)
+    })
+  }, [cruce, mapaListo])
+
   // Visibilidad de capas
   useEffect(() => {
     cuandoListo((m) => {
@@ -541,11 +734,37 @@ export default function Mapa({
       poner('barrios-linea', capas.barrios)
       poner('barrios-etiqueta', capas.barrios)
       poner('equipamientos', capas.equipamientos)
+      poner('calor-registros', mapaCalor === 'registros')
+      poner('calor-pendientes', mapaCalor === 'pendientes')
+      poner('calor-equipamientos', mapaCalor === 'equipamientos')
+      poner('deficit-relleno', deficit !== null)
+      poner('deficit-linea', deficit !== null)
+      poner('cruce-alerta', cruce !== null)
+
+      /*
+       * Opacidad de los puntos. Son tres situaciones y una sola propiedad:
+       * con un cruce activo mandan las dos categorías cruzadas y el resto se
+       * apaga; con el calor encendido se atenúan todos, porque a 400 registros
+       * el punterío tapa por completo la mancha que se quiere leer; y sin nada
+       * de eso, se ven como siempre.
+       */
+      const opacidad: ExpressionSpecification | number = cruce
+        ? ([
+            'case',
+            ['in', ['get', 'categoria'], ['literal', [cruce.a, cruce.b]]],
+            0.95,
+            0.12,
+          ] as unknown as ExpressionSpecification)
+        : mapaCalor !== 'ninguno'
+          ? 0.3
+          : 0.9
+      m.setPaintProperty('pois', 'circle-opacity', opacidad)
+      m.setPaintProperty('pois', 'circle-stroke-opacity', opacidad)
       for (const r of rotulos.current) {
         r.getElement().style.display = capas.plataformas ? '' : 'none'
       }
     })
-  }, [capas, mapaListo])
+  }, [capas, mapaCalor, deficit, cruce, mapaListo])
 
   /**
    * Plataforma activa: se rellena, se engruesa su contorno, las demás se

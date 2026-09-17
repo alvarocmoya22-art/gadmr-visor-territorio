@@ -1,7 +1,7 @@
 import { CATEGORIAS, colorSerie, type ClaveCategoria } from '../lib/categorias'
 import { numero } from '../lib/format'
 import type { Filtros as FiltrosT, Resumen } from '../hooks/usePuntos'
-import type { CapasVisibles } from './Mapa'
+import type { CapasVisibles, MapaCalor } from './Mapa'
 import type { Barrio, Plataforma } from '../lib/municipal'
 import { MAPAS_BASE } from '../config/mapasBase'
 import { hayToken as hayTokenMapillary } from '../lib/mapillary'
@@ -15,6 +15,8 @@ interface Props {
   capas: CapasVisibles
   mapaBase: string
   onMapaBase: (clave: string) => void
+  mapaCalor: MapaCalor
+  onMapaCalor: (m: MapaCalor) => void
   onCambio: (f: FiltrosT) => void
   onCapas: (c: CapasVisibles) => void
 }
@@ -39,6 +41,8 @@ export default function Filtros({
   capas,
   mapaBase,
   onMapaBase,
+  mapaCalor,
+  onMapaCalor,
   onCambio,
   onCapas,
 }: Props) {
@@ -134,6 +138,57 @@ export default function Filtros({
         <p className="mt-1 text-[11px]" style={{ color: 'var(--gr-tinta-3)' }}>
           {MAPAS_BASE.find((b) => b.clave === mapaBase)?.nota}
         </p>
+      </div>
+
+      <div>
+        <label htmlFor="mapa-calor" className="gr-eyebrow mb-1.5">
+          Mapa de calor
+        </label>
+        <select
+          id="mapa-calor"
+          value={mapaCalor}
+          onChange={(e) => onMapaCalor(e.target.value as MapaCalor)}
+          className="w-full rounded border px-2 py-1.5 text-sm"
+          style={campo}
+        >
+          <option value="ninguno">Sin mapa de calor</option>
+          <option value="registros">Densidad de registros (OSM)</option>
+          <option value="pendientes">Densidad de lo que falta levantar</option>
+          <option value="equipamientos">Densidad de equipamientos del GADM</option>
+        </select>
+        {mapaCalor !== 'ninguno' && (
+          <>
+            {/* La rampa lleva sus extremos rotulados: una mancha de color sin
+                escala no dice cuanta densidad es mucha. */}
+            <div className="mt-1.5 flex items-center gap-1.5">
+              <span className="text-[10px]" style={{ color: 'var(--gr-tinta-3)' }}>
+                menos
+              </span>
+              <span
+                aria-hidden
+                className="h-2 flex-1 rounded-sm"
+                style={{
+                  background:
+                    mapaCalor === 'pendientes'
+                      ? 'linear-gradient(to right, rgba(255,241,214,.3), #fad68c, #f0a64a, #db6c2c, #b23a1e, #781c12)'
+                      : 'linear-gradient(to right, rgba(220,233,244,.2), #b3cfe7, #7faed6, #4a88be, #1f5f94, #0a3860)',
+                }}
+              />
+              <span className="text-[10px]" style={{ color: 'var(--gr-tinta-3)' }}>
+                más
+              </span>
+            </div>
+            <p className="mt-1 text-[11px]" style={{ color: 'var(--gr-tinta-3)' }}>
+              Densidad de{' '}
+              {mapaCalor === 'registros'
+                ? 'lo registrado en OSM'
+                : mapaCalor === 'pendientes'
+                  ? 'los registros sin verificar o con la verificación vencida'
+                  : 'los equipamientos del inventario'}
+              , sobre lo que dejan ver los filtros. Cambia al filtrar por plataforma o barrio.
+            </p>
+          </>
+        )}
       </div>
 
       <div>

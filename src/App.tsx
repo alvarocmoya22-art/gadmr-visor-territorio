@@ -1,13 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import Mapa, { type CapasVisibles } from './components/Mapa'
+import Mapa, { type CapasVisibles, type MapaCalor } from './components/Mapa'
 import PanelKpis from './components/PanelKpis'
 import Filtros from './components/Filtros'
+import Pestanas, { type Pestana } from './components/Pestanas'
 import BuscadorCalles from './components/BuscadorCalles'
 import TablaPuntos from './components/TablaPuntos'
 import TablaPlataformas from './components/TablaPlataformas'
 import Ficha from './components/Ficha'
 import TiraFotos from './components/TiraFotos'
 import FichaEquipamiento from './components/FichaEquipamiento'
+import PanelAnalisis, {
+  ANALISIS_INICIAL,
+  type EstadoAnalisis,
+} from './components/PanelAnalisis'
 import {
   aplicarFiltros,
   filtrarEquipamientos,
@@ -16,7 +21,8 @@ import {
   useTerritorio,
   type Filtros as FiltrosT,
 } from './hooks/usePuntos'
-import { descargarGeoJSON, descargarShapefile } from './lib/exportar'
+import { descargarCsv, descargarGeoJSON, descargarShapefile } from './lib/exportar'
+import { calcularDeficit, cruzar, hallazgosACsv, sinInventariar } from './lib/analisis'
 import { avancePorPlataforma } from './lib/municipal'
 import { VISTA_INICIAL } from './config/riobamba'
 import { MAPA_BASE_INICIAL } from './config/mapasBase'
@@ -27,6 +33,9 @@ import type { Foto } from './lib/mapillary'
 import type { Calle } from './lib/calles'
 
 type Tema = 'claro' | 'oscuro' | 'sistema'
+
+/** Secciones del panel lateral. */
+type ClavePestana = 'filtros' | 'analisis' | 'datos' | 'calle'
 
 const CAPAS_INICIALES: CapasVisibles = {
   mapillary: hayTokenMapillary,
@@ -59,19 +68,17 @@ export default function App() {
   const [centro, setCentro] = useState<[number, number]>(VISTA_INICIAL.centro)
   const [calleElegida, setCalleElegida] = useState<Calle | null>(null)
   const [mapaBase, setMapaBase] = useState(MAPA_BASE_INICIAL)
+  const [mapaCalor, setMapaCalor] = useState<MapaCalor>('ninguno')
+  const [analisis, setAnalisis] = useState<EstadoAnalisis>(ANALISIS_INICIAL)
   const [tema, setTema] = useState<Tema>('sistema')
-  const panel = useRef<HTMLElement>(null)
+  const [pestana, setPestana] = useState<ClavePestana>('filtros')
+  const panel = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const raiz = document.documentElement
     if (tema === 'sistema') raiz.removeAttribute('data-theme')
     else raiz.setAttribute('data-theme', tema === 'oscuro' ? 'dark' : 'light')
   }, [tema])
-
-  // Al abrir una ficha, el panel vuelve arriba: si no, queda cortada por el scroll.
-  useEffect(() => {
-    if (seleccionadoId || equipSeleccionadoId) panel.current?.scrollTo({ top: 0 })
-  }, [seleccionadoId, equipSeleccionadoId])
 
   const filtrados = useMemo(() => aplicarFiltros(todos, filtros), [todos, filtros])
   const equipFiltrados = useMemo(
@@ -119,6 +126,59 @@ export default function App() {
     [equipFiltrados],
   )
 
+  /*
+   * El analisis mide cobertura, y la cobertura no se detiene en el limite del
+   * barrio: quien vive en uno usa el centro de salud del de al lado. Por eso
+   * estos dos ambitos ignoran el filtro de barrio y se quedan en la
+   * plataforma, mientras que el cruce si respeta el barrio elegido.
+   */
+  const ambitoPlataforma = useMemo(
+    () => aplicarFiltros(todos, { ...filtros, categorias: new Set(), barrio: null }),
+    [todos, filtros],
+  )
+  const equipAmbito = useMemo(
+    () => filtrarEquipamientos(equipamientos, { ...filtros, barrio: null }),
+    [equipamientos, filtros],
+  )
+
+  // Solo se calcula con la capa encendida: recorre los 197 barrios y no hay
+  // por que pagarlo mientras nadie la mire.
+  const deficit = useMemo(
+    () =>
+      analisis.deficit && capasMun
+        ? calcularDeficit(
+            capasMun.barriosLista,
+            capasMun.plataformas,
+            equipAmbito,
+            ambitoPlataforma,
+            filtros.plataforma,
+          )
+        : null,
+    [analisis.deficit, capasMun, equipAmbito, ambitoPlataforma, filtros.plataforma],
+  )
+
+  const cruce = useMemo(
+    () => (analisis.cruce ? cruzar(ambito, analisis.a, analisis.b, analisis.umbral) : null),
+    [analisis.cruce, analisis.a, analisis.b, analisis.umbral, ambito],
+  )
+
+  const hallazgos = useMemo(
+    () => sinInventariar(ambito, equipAmbito, analisis.hallazgos),
+    [ambito, equipAmbito, analisis.hallazgos],
+  )
+
+  const ambitoRotulo = filtros.plataforma
+    ? `plataforma ${filtros.plataforma}${filtros.barrio ? ` · ${filtros.barrio}` : ''}`
+    : filtros.barrio
+      ? filtros.barrio
+      : 'todo el cantón'
+
+  const descargarHallazgos = () =>
+    descargarCsv(
+      hallazgosACsv(hallazgos),
+      `riobamba-sin-inventariar-${analisis.hallazgos}-${new Date().toISOString().slice(0, 10)}.csv`,
+    )
+
   /**
    * Elegir una plataforma enciende su capa: filtrar por un sector que no se ve
    * dibujado deja al usuario sin saber qué recorte está mirando.
@@ -139,6 +199,8 @@ export default function App() {
     }
     setFiltros(f)
   }
+
+  const elegirBarrio = (nombre: string) => cambiarFiltros({ ...filtros, barrio: nombre })
 
   const elegirPunto = (id: string | null) => {
     setFotoDelMapa(null)
@@ -168,6 +230,22 @@ export default function App() {
     }
   }
 
+  const pestanas: Pestana<ClavePestana>[] = [
+    { clave: 'filtros', rotulo: 'Filtros', nota: 'Buscador, ámbito, capas y leyenda' },
+    {
+      clave: 'analisis',
+      rotulo: 'Análisis',
+      nota: 'Déficit por barrio, cruce de categorías y lo no inventariado',
+    },
+    {
+      clave: 'datos',
+      rotulo: 'Datos',
+      cuenta: filtrados.length,
+      nota: 'Avance por plataforma, inventario por verificar y cola de campo',
+    },
+    { clave: 'calle', rotulo: 'Calle', nota: 'Fotografía de calle de Mapillary' },
+  ]
+
   const campo = {
     background: 'var(--gr-superficie)',
     borderColor: 'var(--gr-linea-fuerte)',
@@ -180,13 +258,21 @@ export default function App() {
         href="#tabla"
         className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:m-2 focus:rounded focus:bg-white focus:p-2"
       >
-        Saltar al listado de puntos
+        Saltar al panel lateral
       </a>
 
       <header
         className="flex flex-wrap items-center gap-3 border-b px-4 py-2.5"
         style={{ background: 'var(--gr-superficie)', borderColor: 'var(--gr-linea)' }}
       >
+        {/* El escudo del canton, recortado del logotipo institucional. */}
+        <img
+          src={`${import.meta.env.BASE_URL}escudo.png`}
+          alt=""
+          width={32}
+          height={32}
+          className="shrink-0 rounded"
+        />
         <div className="mr-auto">
           <h1 className="text-[15px] font-bold" style={{ color: 'var(--gr-tinta)' }}>
             Visor de Territorio · GADM Riobamba
@@ -293,7 +379,7 @@ export default function App() {
 
       <main className="grid gap-3 p-4 lg:min-h-0 lg:flex-1 lg:grid-cols-[1fr_380px]">
         <section
-          className="h-[55vh] min-h-[320px] overflow-hidden rounded lg:h-auto"
+          className="relative h-[60vh] min-h-[340px] overflow-hidden rounded lg:h-auto"
           style={{ border: '1px solid var(--gr-linea-fuerte)' }}
         >
           <Mapa
@@ -305,6 +391,12 @@ export default function App() {
             barrioActivo={filtros.barrio}
             calleElegida={calleElegida}
             mapaBase={mapaBase}
+            mapaCalor={mapaCalor}
+            deficit={deficit?.geo ?? null}
+            cruce={
+              cruce ? { a: cruce.a, b: cruce.b, desatendidos: cruce.desatendidos } : null
+            }
+            onElegirBarrio={elegirBarrio}
             capas={capas}
             onSeleccionar={elegirPunto}
             onSeleccionarEquipamiento={elegirEquipamiento}
@@ -320,61 +412,81 @@ export default function App() {
             // Pinchar una foto del mapa la abre en el panel, no en otra pestaña.
             onFotoMapillary={(id, lon, lat) => setFotoDelMapa({ id, lon, lat })}
           />
-        </section>
 
-        <aside ref={panel} className="space-y-3 lg:min-h-0 lg:overflow-auto" id="tabla">
-          <div
-            className="rounded p-3"
-            style={{ background: 'var(--gr-superficie)', border: '1px solid var(--gr-linea)' }}
-          >
-            <BuscadorCalles
-              elegida={calleElegida}
-              onElegir={setCalleElegida}
-              onIrAPlataforma={elegirPlataforma}
-            />
-          </div>
-
-          <div
-            className="rounded p-3"
-            style={{ background: 'var(--gr-superficie)', border: '1px solid var(--gr-linea)' }}
-          >
-            <TiraFotos
-              {...fotosCalle}
-              onFotoActiva={setFotoActiva}
-              idPreferido={fotoDelMapa?.id ?? null}
-            />
-          </div>
-
-          {equipSeleccionado ? (
-            <FichaEquipamiento
-              equipamiento={equipSeleccionado}
-              onCerrar={() => setEquipSeleccionadoId(null)}
-              onVerEnOsm={elegirPunto}
-            />
-          ) : seleccionado ? (
-            <Ficha
-              punto={seleccionado}
-              onCerrar={() => setSeleccionadoId(null)}
-            />
-          ) : (
-            <div
-              className="rounded p-3"
-              style={{ background: 'var(--gr-superficie)', border: '1px solid var(--gr-linea)' }}
-            >
-              <Filtros
-                filtros={filtros}
-                resumenAmbito={resumenAmbito}
-                plataformas={capasMun?.plataformas ?? []}
-                capas={capas}
-                barrios={capasMun?.barriosLista ?? []}
-                mapaBase={mapaBase}
-                onMapaBase={setMapaBase}
-                onCambio={cambiarFiltros}
-                onCapas={setCapas}
-              />
+          {/* La ficha flota sobre el mapa en vez de ocupar el panel: asi se
+              puede mirar un punto sin perder de vista los filtros ni el
+              analisis, que es justo lo que se estaba haciendo antes. */}
+          {(equipSeleccionado || seleccionado) && (
+            <div className="absolute left-3 top-3 z-10 max-h-[calc(100%-1.5rem)] w-[330px] max-w-[calc(100%-1.5rem)] overflow-auto rounded shadow-lg">
+              {equipSeleccionado ? (
+                <FichaEquipamiento
+                  equipamiento={equipSeleccionado}
+                  onCerrar={() => setEquipSeleccionadoId(null)}
+                  onVerEnOsm={elegirPunto}
+                />
+              ) : (
+                seleccionado && (
+                  <Ficha punto={seleccionado} onCerrar={() => setSeleccionadoId(null)} />
+                )
+              )}
             </div>
           )}
+        </section>
 
+        <aside
+          className="flex flex-col overflow-hidden rounded lg:min-h-0"
+          id="tabla"
+          style={{ background: 'var(--gr-superficie)', border: '1px solid var(--gr-linea)' }}
+        >
+          <Pestanas pestanas={pestanas} activa={pestana} onCambiar={setPestana} />
+          <div ref={panel} className="flex-1 space-y-3 overflow-auto p-3">
+            {pestana === 'filtros' && (
+              <>
+                <BuscadorCalles
+                  elegida={calleElegida}
+                  onElegir={setCalleElegida}
+                  onIrAPlataforma={elegirPlataforma}
+                />
+                <Filtros
+                  filtros={filtros}
+                  resumenAmbito={resumenAmbito}
+                  plataformas={capasMun?.plataformas ?? []}
+                  capas={capas}
+                  barrios={capasMun?.barriosLista ?? []}
+                  mapaBase={mapaBase}
+                  onMapaBase={setMapaBase}
+                  mapaCalor={mapaCalor}
+                  onMapaCalor={setMapaCalor}
+                  onCambio={cambiarFiltros}
+                  onCapas={setCapas}
+                />
+              </>
+            )}
+
+            {pestana === 'analisis' && (
+              <PanelAnalisis
+                analisis={analisis}
+                onAnalisis={setAnalisis}
+                deficit={deficit}
+                cruce={cruce}
+                hallazgos={hallazgos}
+                ambito={ambitoRotulo}
+                onElegirBarrio={elegirBarrio}
+                onElegirPunto={elegirPunto}
+                onDescargarHallazgos={descargarHallazgos}
+              />
+            )}
+
+            {pestana === 'calle' && (
+              <TiraFotos
+                {...fotosCalle}
+                onFotoActiva={setFotoActiva}
+                idPreferido={fotoDelMapa?.id ?? null}
+              />
+            )}
+
+            {pestana === 'datos' && (
+              <>
           {avance.length > 0 && (
             <div>
               <p className="gr-eyebrow mb-1.5">Registros por plataforma</p>
@@ -434,18 +546,21 @@ export default function App() {
             </div>
           )}
 
-          <div>
-            {/* Dice cuantos faltan sobre el total: «57 puntos» a secas se leia
-                como si la cola fuera todo lo que hay en el sector. */}
-            <p className="gr-eyebrow mb-1.5">
-              Cola de campo · {numero(resumen.pendientes)} pendientes de{' '}
-              {numero(filtrados.length)} registros
-            </p>
-            <TablaPuntos
-              puntos={filtrados}
-              seleccionadoId={seleccionadoId}
-              onSeleccionar={elegirPunto}
-            />
+                <div>
+                  {/* Dice cuantos faltan sobre el total: «57 puntos» a secas se
+                      leia como si la cola fuera todo lo que hay en el sector. */}
+                  <p className="gr-eyebrow mb-1.5">
+                    Cola de campo · {numero(resumen.pendientes)} pendientes de{' '}
+                    {numero(filtrados.length)} registros
+                  </p>
+                  <TablaPuntos
+                    puntos={filtrados}
+                    seleccionadoId={seleccionadoId}
+                    onSeleccionar={elegirPunto}
+                  />
+                </div>
+              </>
+            )}
           </div>
         </aside>
       </main>
