@@ -104,6 +104,9 @@ export default function Filtros({
       <div>
         <label htmlFor="barrio" className="gr-eyebrow mb-1.5">
           Barrio
+          {filtros.plataforma && filtros.plataforma !== URBANO
+            ? ` · los ${barrios.length} de la plataforma ${filtros.plataforma}`
+            : ''}
         </label>
         <select
           id="barrio"

@@ -22,7 +22,7 @@ import {
   type Filtros as FiltrosT,
 } from './hooks/usePuntos'
 import { descargarCsv, descargarGeoJSON, descargarShapefile } from './lib/exportar'
-import { calcularDeficit, cruzar, hallazgosACsv, sinInventariar } from './lib/analisis'
+import { barriosDe, calcularDeficit, cruzar, hallazgosACsv, sinInventariar } from './lib/analisis'
 import { avancePorPlataforma, URBANO } from './lib/municipal'
 import { VISTA_INICIAL } from './config/riobamba'
 import { MAPA_BASE_INICIAL } from './config/mapasBase'
@@ -141,20 +141,24 @@ export default function App() {
     [equipamientos, filtros],
   )
 
-  // Solo se calcula con la capa encendida: recorre los 197 barrios y no hay
-  // por que pagarlo mientras nadie la mire.
+  /**
+   * Los barrios del ambito. Alimenta tanto el selector como el analisis: si el
+   * filtro ofrece unos barrios y la coropleta pinta otros, el mapa y el panel
+   * dejan de hablar del mismo territorio.
+   */
+  const barriosAmbito = useMemo(
+    () => barriosDe(capasMun?.barriosLista ?? [], filtros.plataforma),
+    [capasMun, filtros.plataforma],
+  )
+
+  // Solo se calcula con la capa encendida: no hay por que recorrer los barrios
+  // mientras nadie la mire.
   const deficit = useMemo(
     () =>
       analisis.deficit && capasMun
-        ? calcularDeficit(
-            capasMun.barriosLista,
-            capasMun.plataformas,
-            equipAmbito,
-            ambitoPlataforma,
-            filtros.plataforma,
-          )
+        ? calcularDeficit(barriosAmbito, equipAmbito, ambitoPlataforma)
         : null,
-    [analisis.deficit, capasMun, equipAmbito, ambitoPlataforma, filtros.plataforma],
+    [analisis.deficit, capasMun, barriosAmbito, equipAmbito, ambitoPlataforma],
   )
 
   const cruce = useMemo(
@@ -194,8 +198,12 @@ export default function App() {
   }
 
   const cambiarFiltros = (f: FiltrosT) => {
-    if (f.plataforma && f.plataforma !== filtros.plataforma) {
-      setCapas((c) => (c.plataformas ? c : { ...c, plataformas: true }))
+    if (f.plataforma !== filtros.plataforma) {
+      if (f.plataforma) setCapas((c) => (c.plataformas ? c : { ...c, plataformas: true }))
+      // Al cambiar de ambito, un barrio de la plataforma anterior dejaria la
+      // vista vacia sin decir por que. Se suelta salvo que siga perteneciendo.
+      const suyos = barriosDe(capasMun?.barriosLista ?? [], f.plataforma)
+      if (f.barrio && !suyos.some((b) => b.nombre === f.barrio)) f = { ...f, barrio: null }
     }
     // Lo mismo con el barrio: filtrar por una zona que no se ve dibujada deja
     // sin saber que recorte se esta mirando.
@@ -457,7 +465,7 @@ export default function App() {
                   resumenAmbito={resumenAmbito}
                   plataformas={capasMun?.plataformas ?? []}
                   capas={capas}
-                  barrios={capasMun?.barriosLista ?? []}
+                  barrios={barriosAmbito}
                   mapaBase={mapaBase}
                   onMapaBase={setMapaBase}
                   mapaCalor={mapaCalor}

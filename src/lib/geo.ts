@@ -60,6 +60,75 @@ export function poligonosDe(g: GeoJSON.Geometry): Anillo[][] {
   return []
 }
 
+/** Centroide de área de un anillo, con su área sin signo. */
+function centroideAnillo(anillo: Anillo): { x: number; y: number; area: number } {
+  let a = 0
+  let x = 0
+  let y = 0
+  for (let i = 0, j = anillo.length - 1; i < anillo.length; j = i++) {
+    const [xi, yi] = anillo[i]
+    const [xj, yj] = anillo[j]
+    const f = xj * yi - xi * yj
+    a += f
+    x += (xj + xi) * f
+    y += (yj + yi) * f
+  }
+  if (a === 0) {
+    // Anillo degenerado: se cae al promedio de vértices antes que devolver NaN.
+    const n = anillo.length || 1
+    return {
+      x: anillo.reduce((s, p) => s + p[0], 0) / n,
+      y: anillo.reduce((s, p) => s + p[1], 0) / n,
+      area: 0,
+    }
+  }
+  return { x: x / (3 * a), y: y / (3 * a), area: Math.abs(a / 2) }
+}
+
+/**
+ * Un punto que cae DENTRO de la zona y cerca de su centro.
+ *
+ * El centroide de área no sirve solo: en las zonas en forma de L o de U cae
+ * fuera, y entonces ni la distancia que se mide desde él ni la plataforma que
+ * se le asigna son las de nadie. Se prueba el centroide y, si queda fuera, se
+ * busca en una rejilla el punto interior más próximo a él.
+ *
+ * De varios polígonos se usa el de mayor superficie: un barrio partido en dos
+ * piezas se representa por la principal, no por un punto intermedio que
+ * caería en el hueco entre ambas.
+ */
+export function puntoInterior(poligonos: Anillo[][]): [number, number] {
+  let mayor = poligonos[0]
+  let areaMayor = -1
+  for (const poly of poligonos) {
+    const { area } = centroideAnillo(poly[0])
+    if (area > areaMayor) {
+      areaMayor = area
+      mayor = poly
+    }
+  }
+  const c = centroideAnillo(mayor[0])
+  if (enPoligono(c.x, c.y, mayor)) return [c.x, c.y]
+
+  const [oeste, sur, este, norte] = cajaDe([mayor[0]])
+  const PASOS = 14
+  let mejor: [number, number] = [c.x, c.y]
+  let mejorD = Infinity
+  for (let i = 1; i < PASOS; i++) {
+    for (let j = 1; j < PASOS; j++) {
+      const x = oeste + ((este - oeste) * i) / PASOS
+      const y = sur + ((norte - sur) * j) / PASOS
+      if (!enPoligono(x, y, mayor)) continue
+      const d = (x - c.x) ** 2 + (y - c.y) ** 2
+      if (d < mejorD) {
+        mejorD = d
+        mejor = [x, y]
+      }
+    }
+  }
+  return mejor
+}
+
 const RUIDO = new Set(['de', 'del', 'la', 'el', 'los', 'las', 'y', 'san', 'santa', 'dr', 'doctor'])
 
 /** Minúsculas, sin tildes, sin palabras vacías: base para comparar nombres. */

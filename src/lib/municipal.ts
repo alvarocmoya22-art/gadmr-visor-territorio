@@ -6,7 +6,7 @@
  * `scripts/convertir_shapefiles.py`. Ese script es la única vía de actualización:
  * si llegan shapefiles nuevos, se vuelve a correr, no se editan los GeoJSON.
  */
-import { cajaDe, distanciaM, enCaja, enPoligono, normalizar, poligonosDe, similitud, type Anillo, type Caja } from './geo'
+import { cajaDe, distanciaM, enCaja, enPoligono, normalizar, poligonosDe, puntoInterior, similitud, type Anillo, type Caja } from './geo'
 import type { Punto } from './overpass'
 
 export interface Plataforma {
@@ -25,6 +25,14 @@ export interface Barrio {
   caja: Caja
   /** Cuantos poligonos sueltos componen el barrio. */
   piezas: number
+  /**
+   * Punto dentro del barrio, cerca de su centro. Se calcula una vez al cargar
+   * porque de él dependen tanto la plataforma como las distancias del
+   * análisis, y recorrer 204 polígonos en cada cambio de filtro se nota.
+   */
+  centro: [number, number]
+  /** Plataforma que contiene ese centro; null si el barrio cae fuera de todas. */
+  plataforma: string | null
 }
 
 export interface EquipamientoMunicipal {
@@ -103,6 +111,16 @@ function nombrarBarrios(fc: GeoJSON.FeatureCollection): void {
   }
 }
 
+/**
+ * Superficie del barrio en hectáreas.
+ *
+ * Se prefiere la calculada de la geometría: el `AREA_HA_` del shapefile
+ * municipal repite los mismos 62,28 ha en 17 barrios que miden entre 1 y 11,
+ * y esa cifra es la que el visor enseña junto a cada nombre.
+ */
+const areaDe = (p: Record<string, unknown>): number =>
+  Number(p.area_ha_geom ?? p.area_ha ?? 0)
+
 /** Un barrio por nombre: las piezas sueltas del mismo barrio se unen. */
 function aBarrios(fc: GeoJSON.FeatureCollection): Barrio[] {
   const porNombre = new Map<string, Barrio>()
@@ -113,16 +131,18 @@ function aBarrios(fc: GeoJSON.FeatureCollection): Barrio[] {
     const ya = porNombre.get(nombre)
     if (ya) {
       ya.poligonos.push(...poligonos)
-      ya.areaHa += Number(p.area_ha ?? 0)
+      ya.areaHa += areaDe(p)
       ya.caja = cajaDe(ya.poligonos.flat())
       ya.piezas++
     } else {
       porNombre.set(nombre, {
         nombre,
-        areaHa: Number(p.area_ha ?? 0),
+        areaHa: areaDe(p),
         poligonos,
         caja: cajaDe(poligonos.flat()),
         piezas: 1,
+        centro: [0, 0], // se rellena al terminar de unir las piezas
+        plataforma: null,
       })
     }
   }
@@ -227,6 +247,14 @@ export async function cargarCapas(): Promise<CapasMunicipales> {
   const plataformas = aPlataformas(plataformasGeo)
   nombrarBarrios(barrios)
   const barriosLista = aBarrios(barrios)
+
+  // Con todas las piezas ya unidas, cada barrio recibe su centro y la
+  // plataforma que lo contiene. Un barrio a caballo entre dos cuenta para
+  // aquella donde cae su centro, el mismo criterio que para los puntos.
+  for (const b of barriosLista) {
+    b.centro = puntoInterior(b.poligonos)
+    b.plataforma = plataformaDe(b.centro[0], b.centro[1], plataformas)
+  }
 
   const equipamientos: EquipamientoMunicipal[] = equipamientosGeo.features.map((f, i) => {
     const p = f.properties ?? {}

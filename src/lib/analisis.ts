@@ -10,86 +10,24 @@
  * serán mayores; donde importa, el rótulo lo dice.
  */
 import type { ClaveCategoria } from './categorias'
-import { distanciaM, enPoligono, type Anillo } from './geo'
-import type { Barrio, EquipamientoMunicipal, Plataforma } from './municipal'
+import { distanciaM } from './geo'
+import type { Barrio, EquipamientoMunicipal } from './municipal'
 import { RADIO_COTEJO_M, URBANO } from './municipal'
-import { plataformaDe } from './municipal'
 import type { Punto } from './overpass'
 
-// ───────────────────────────────────────────── punto interior de un polígono
-
-/** Centroide de área de un anillo, con su área con signo. */
-function centroideAnillo(anillo: Anillo): { x: number; y: number; area: number } {
-  let a = 0
-  let x = 0
-  let y = 0
-  for (let i = 0, j = anillo.length - 1; i < anillo.length; j = i++) {
-    const [xi, yi] = anillo[i]
-    const [xj, yj] = anillo[j]
-    const f = xj * yi - xi * yj
-    a += f
-    x += (xj + xi) * f
-    y += (yj + yi) * f
-  }
-  if (a === 0) {
-    // Anillo degenerado: se cae al promedio de vértices antes que devolver NaN.
-    const n = anillo.length || 1
-    return {
-      x: anillo.reduce((s, p) => s + p[0], 0) / n,
-      y: anillo.reduce((s, p) => s + p[1], 0) / n,
-      area: 0,
-    }
-  }
-  return { x: x / (3 * a), y: y / (3 * a), area: Math.abs(a / 2) }
-}
+// ─────────────────────────────────────────────── 0. ámbito
 
 /**
- * Un punto que cae DENTRO del barrio y cerca de su centro.
+ * Los barrios que caen dentro del ámbito elegido.
  *
- * El centroide de área no sirve solo: en los barrios en forma de L o de U cae
- * fuera, y entonces la distancia que se mide no es la de nadie. Se prueba el
- * centroide y, si queda fuera, se busca en una rejilla el punto interior más
- * próximo a él.
+ * Elegir la plataforma D y seguir viendo los 204 barrios del cantón obliga a
+ * saberse de memoria cuáles son suyos, que es justo lo que el visor tiene que
+ * ahorrar.
  */
-function puntoInterior(poligonos: Anillo[][]): [number, number] {
-  // Se trabaja sobre el polígono de mayor superficie: los barrios partidos en
-  // dos piezas se representan por la principal, no por un punto intermedio
-  // que caería en el hueco entre ambas.
-  let mayor = poligonos[0]
-  let areaMayor = -1
-  for (const poly of poligonos) {
-    const { area } = centroideAnillo(poly[0])
-    if (area > areaMayor) {
-      areaMayor = area
-      mayor = poly
-    }
-  }
-  const c = centroideAnillo(mayor[0])
-  if (enPoligono(c.x, c.y, mayor)) return [c.x, c.y]
-
-  let oeste = Infinity, sur = Infinity, este = -Infinity, norte = -Infinity
-  for (const [x, y] of mayor[0]) {
-    if (x < oeste) oeste = x
-    if (x > este) este = x
-    if (y < sur) sur = y
-    if (y > norte) norte = y
-  }
-  const PASOS = 14
-  let mejor: [number, number] = [c.x, c.y]
-  let mejorD = Infinity
-  for (let i = 1; i < PASOS; i++) {
-    for (let j = 1; j < PASOS; j++) {
-      const x = oeste + ((este - oeste) * i) / PASOS
-      const y = sur + ((norte - sur) * j) / PASOS
-      if (!enPoligono(x, y, mayor)) continue
-      const d = (x - c.x) ** 2 + (y - c.y) ** 2
-      if (d < mejorD) {
-        mejorD = d
-        mejor = [x, y]
-      }
-    }
-  }
-  return mejor
+export function barriosDe(barrios: Barrio[], plataforma: string | null): Barrio[] {
+  if (!plataforma) return barrios
+  if (plataforma === URBANO) return barrios.filter((b) => b.plataforma !== null)
+  return barrios.filter((b) => b.plataforma === plataforma)
 }
 
 // ─────────────────────────────────────────────── 1. déficit de equipamiento
@@ -124,17 +62,13 @@ export const CORTES_DEFICIT = [250, 500, 750, 1000]
 /**
  * Distancia de cada barrio al equipamiento más cercano, y cuántos tiene dentro.
  *
- * `plataforma` recorta el conjunto de barrios: se queda con los que tienen su
- * centro dentro de ella, o dentro de cualquiera si es `URBANO`. Un barrio a
- * caballo entre dos plataformas cuenta para aquella donde está su centro, que
- * es el criterio que ya usa el resto del visor para asignar puntos a un sector.
+ * Recibe los barrios ya recortados al ámbito: quién pertenece a qué plataforma
+ * se decide una sola vez, al cargar las capas.
  */
 export function calcularDeficit(
   barrios: Barrio[],
-  plataformas: Plataforma[],
   equipamientos: EquipamientoMunicipal[],
   puntos: Punto[],
-  plataforma: string | null,
 ): Deficit {
   const registrosPorBarrio = new Map<string, number>()
   for (const p of puntos) {
@@ -149,9 +83,7 @@ export function calcularDeficit(
   const rasgos: GeoJSON.Feature[] = []
 
   for (const b of barrios) {
-    const [lon, lat] = puntoInterior(b.poligonos)
-    const suya = plataformaDe(lon, lat, plataformas)
-    if (plataforma === URBANO ? !suya : plataforma && suya !== plataforma) continue
+    const [lon, lat] = b.centro
 
     let distancia: number | null = null
     for (const e of equipamientos) {

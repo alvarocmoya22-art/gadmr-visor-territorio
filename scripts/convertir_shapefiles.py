@@ -59,7 +59,14 @@ b = gpd.read_file(f"{ORIGEN_BARRIOS}/barrios_urb_actualizado.shp")
 b = b.rename(columns={"Barrio": "nombre", "AREA_HA_": "area_ha", "NUMERO": "numero",
                       "BARRIOS_14": "catastro_2014"})
 b["nombre"] = b["nombre"].fillna("Sin nombre")
-escribir(b[["numero", "nombre", "area_ha", "catastro_2014", "geometry"]], "barrios", 3)
+# El AREA_HA_ del shapefile no es de fiar: 17 barrios declaran los mismos
+# 62,28 ha cuando miden entre 1 y 11. Se calcula de la geometria, como ya se
+# hace con las plataformas, y el visor usa esa.
+b["area_ha_geom"] = (b.geometry.area / 10000).round(2)
+malos = int((b["area_ha"] - b["area_ha_geom"]).abs().gt(1).sum())
+log(f"  barrios con area declarada fuera de sitio: {malos} de {len(b)}")
+escribir(b[["numero", "nombre", "area_ha", "area_ha_geom", "catastro_2014", "geometry"]],
+         "barrios", 3)
 
 # --- Equipamientos municipales (se descarta `path`: rutas del disco del autor)
 e = gpd.read_file(f"{ORIGEN}/EQUIPAMIENTOS_CARGA.shp")
