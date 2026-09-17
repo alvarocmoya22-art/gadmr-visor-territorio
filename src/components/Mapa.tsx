@@ -5,7 +5,12 @@ import { VISTA_INICIAL } from '../config/riobamba'
 import { capaDe, MAPAS_BASE, MAPA_BASE_INICIAL } from '../config/mapasBase'
 import { CATEGORIAS, paletaResuelta, type ClaveCategoria } from '../lib/categorias'
 import { aGeoJSON, type Punto } from '../lib/overpass'
-import { aGeoJSONEquipamientos, type CapasMunicipales, type EquipamientoMunicipal } from '../lib/municipal'
+import {
+  aGeoJSONEquipamientos,
+  URBANO,
+  type CapasMunicipales,
+  type EquipamientoMunicipal,
+} from '../lib/municipal'
 import { urlTeselas as urlTeselasMapillary } from '../lib/mapillary'
 import { distanciaM } from '../lib/geo'
 import type { Calle } from '../lib/calles'
@@ -144,6 +149,24 @@ function crearEstiloBase(): StyleSpecification {
       layout: { visibility: b.clave === MAPA_BASE_INICIAL ? ('visible' as const) : ('none' as const) },
     })),
   }
+}
+
+/** Encuadre del ámbito elegido: una plataforma, o todas si es el urbano. */
+function cajaDelAmbito(
+  activa: string | null,
+  capas: CapasMunicipales | null,
+): [number, number, number, number] | null {
+  const lista = capas?.plataformas ?? []
+  if (!activa || lista.length === 0) return null
+  const cajas =
+    activa === URBANO ? lista.map((p) => p.caja) : lista.filter((p) => p.clave === activa).map((p) => p.caja)
+  if (cajas.length === 0) return null
+  return [
+    Math.min(...cajas.map((c) => c[0])),
+    Math.min(...cajas.map((c) => c[1])),
+    Math.max(...cajas.map((c) => c[2])),
+    Math.max(...cajas.map((c) => c[3])),
+  ]
 }
 
 function expresionColor(): ExpressionSpecification {
@@ -774,7 +797,9 @@ export default function Mapa({
   useEffect(() => {
     cuandoListo((m) => {
       if (!m.getLayer('plataformas-relleno')) return
-      const activa = plataformaActiva ?? ''
+      // Con el ámbito urbano no hay una plataforma que destacar: se miran
+      // todas a la vez, así que se dibujan como cuando no hay filtro.
+      const activa = plataformaActiva === URBANO ? '' : (plataformaActiva ?? '')
       const esActiva = ['==', ['get', 'clave'], activa]
 
       m.setFilter('plataformas-relleno', esActiva as never)
@@ -799,9 +824,9 @@ export default function Mapa({
         el.style.opacity = activa && !suya ? '0.4' : '1'
       }
 
-      const p = capasMunicipales?.plataformas.find((x) => x.clave === plataformaActiva)
-      if (p) {
-        m.fitBounds([p.caja[0], p.caja[1], p.caja[2], p.caja[3]], {
+      const caja = cajaDelAmbito(plataformaActiva, capasMunicipales)
+      if (caja) {
+        m.fitBounds(caja, {
           padding: 40,
           duration: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 700,
         })

@@ -23,7 +23,7 @@ import {
 } from './hooks/usePuntos'
 import { descargarCsv, descargarGeoJSON, descargarShapefile } from './lib/exportar'
 import { calcularDeficit, cruzar, hallazgosACsv, sinInventariar } from './lib/analisis'
-import { avancePorPlataforma } from './lib/municipal'
+import { avancePorPlataforma, URBANO } from './lib/municipal'
 import { VISTA_INICIAL } from './config/riobamba'
 import { MAPA_BASE_INICIAL } from './config/mapasBase'
 import { hayToken as hayTokenMapillary } from './lib/mapillary'
@@ -167,11 +167,16 @@ export default function App() {
     [ambito, equipAmbito, analisis.hallazgos],
   )
 
-  const ambitoRotulo = filtros.plataforma
-    ? `plataforma ${filtros.plataforma}${filtros.barrio ? ` · ${filtros.barrio}` : ''}`
-    : filtros.barrio
-      ? filtros.barrio
-      : 'todo el cantón'
+  const ambitoRotulo = (() => {
+    const zona =
+      filtros.plataforma === URBANO
+        ? 'Riobamba urbano'
+        : filtros.plataforma
+          ? `plataforma ${filtros.plataforma}`
+          : null
+    if (zona) return filtros.barrio ? `${zona} · ${filtros.barrio}` : zona
+    return filtros.barrio ?? 'todo el cantón'
+  })()
 
   const descargarHallazgos = () =>
     descargarCsv(

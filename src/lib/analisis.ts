@@ -12,7 +12,7 @@
 import type { ClaveCategoria } from './categorias'
 import { distanciaM, enPoligono, type Anillo } from './geo'
 import type { Barrio, EquipamientoMunicipal, Plataforma } from './municipal'
-import { RADIO_COTEJO_M } from './municipal'
+import { RADIO_COTEJO_M, URBANO } from './municipal'
 import { plataformaDe } from './municipal'
 import type { Punto } from './overpass'
 
@@ -125,9 +125,9 @@ export const CORTES_DEFICIT = [250, 500, 750, 1000]
  * Distancia de cada barrio al equipamiento más cercano, y cuántos tiene dentro.
  *
  * `plataforma` recorta el conjunto de barrios: se queda con los que tienen su
- * centro dentro de ella. Un barrio a caballo entre dos plataformas cuenta para
- * aquella donde está su centro, que es el criterio que ya usa el resto del
- * visor para asignar puntos a un sector.
+ * centro dentro de ella, o dentro de cualquiera si es `URBANO`. Un barrio a
+ * caballo entre dos plataformas cuenta para aquella donde está su centro, que
+ * es el criterio que ya usa el resto del visor para asignar puntos a un sector.
  */
 export function calcularDeficit(
   barrios: Barrio[],
@@ -150,7 +150,8 @@ export function calcularDeficit(
 
   for (const b of barrios) {
     const [lon, lat] = puntoInterior(b.poligonos)
-    if (plataforma && plataformaDe(lon, lat, plataformas) !== plataforma) continue
+    const suya = plataformaDe(lon, lat, plataformas)
+    if (plataforma === URBANO ? !suya : plataforma && suya !== plataforma) continue
 
     let distancia: number | null = null
     for (const e of equipamientos) {

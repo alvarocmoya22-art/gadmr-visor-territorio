@@ -61,6 +61,18 @@ export interface CapasMunicipales {
   plataformasGeo: GeoJSON.FeatureCollection
 }
 
+/**
+ * Ámbito que reúne todas las plataformas: el área urbana del cantón.
+ *
+ * No es una plataforma, es la suma de las 18. Hace falta como valor propio
+ * porque «sin filtro» no significa lo mismo: sin filtro entran también los
+ * registros de las parroquias rurales, que no forman parte del levantamiento
+ * por plataformas.
+ *
+ * El asterisco no colisiona con ninguna clave real: van de la A a la Q.
+ */
+export const URBANO = '*'
+
 /** Radio dentro del cual dos registros pueden ser el mismo sitio. */
 export const RADIO_COTEJO_M = 50
 /** Por debajo de este parecido de nombre la coincidencia no se da por buena. */

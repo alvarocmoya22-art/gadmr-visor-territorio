@@ -4,6 +4,7 @@ import type { ClaveCategoria } from '../lib/categorias'
 import {
   barrioDe,
   cargarCapas,
+  URBANO,
   cotejarInventario,
   plataformaDe,
   type CapasMunicipales,
@@ -18,18 +19,24 @@ export interface Filtros {
   frescura: 'todas' | 'pendientes'
   /** Solo fichas a las que les falta algun campo clave. */
   soloIncompletos: boolean
-  /** Clave de plataforma, o null para todo el cantón. */
+  /** Clave de plataforma, `URBANO` para todas, o null para todo el cantón. */
   plataforma: string | null
   /** Nombre de barrio, o null para no filtrar por barrio. */
   barrio: string | null
   texto: string
 }
 
+/**
+ * El visor abre en el area urbana, no en todo el canton: el levantamiento se
+ * organiza por plataformas y son 459 los registros que caen fuera de todas
+ * ellas. Empezar por el canton entero diluia las cifras de portada con
+ * territorio que nadie tiene asignado.
+ */
 export const FILTROS_INICIALES: Filtros = {
   categorias: new Set(),
   frescura: 'todas',
   soloIncompletos: false,
-  plataforma: null,
+  plataforma: URBANO,
   barrio: null,
   texto: '',
 }
@@ -110,7 +117,9 @@ export function useTerritorio() {
 export function aplicarFiltros(puntos: Punto[], f: Filtros): Punto[] {
   const texto = f.texto.trim().toLowerCase()
   return puntos.filter((p) => {
-    if (f.plataforma && p.plataforma !== f.plataforma) return false
+    if (f.plataforma === URBANO) {
+      if (!p.plataforma) return false // cae fuera de toda plataforma: es rural
+    } else if (f.plataforma && p.plataforma !== f.plataforma) return false
     if (f.barrio && p.barrio !== f.barrio) return false
     if (f.categorias.size > 0 && !f.categorias.has(p.categoria)) return false
     if (f.frescura === 'pendientes' && p.frescura !== 'sin_verificar' && p.frescura !== 'vencido')
@@ -130,7 +139,9 @@ export function filtrarEquipamientos(
 ): EquipamientoMunicipal[] {
   const texto = f.texto.trim().toLowerCase()
   return equipamientos.filter((e) => {
-    if (f.plataforma && e.plataforma !== f.plataforma) return false
+    if (f.plataforma === URBANO) {
+      if (!e.plataforma) return false
+    } else if (f.plataforma && e.plataforma !== f.plataforma) return false
     if (f.barrio && e.barrioLimite !== f.barrio) return false
     if (texto && !`${e.nombre} ${e.tipo} ${e.barrio ?? ''}`.toLowerCase().includes(texto))
       return false

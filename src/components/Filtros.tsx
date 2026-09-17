@@ -2,7 +2,7 @@ import { CATEGORIAS, colorSerie, type ClaveCategoria } from '../lib/categorias'
 import { numero } from '../lib/format'
 import type { Filtros as FiltrosT, Resumen } from '../hooks/usePuntos'
 import type { CapasVisibles, MapaCalor } from './Mapa'
-import type { Barrio, Plataforma } from '../lib/municipal'
+import { URBANO, type Barrio, type Plataforma } from '../lib/municipal'
 import { MAPAS_BASE } from '../config/mapasBase'
 import { hayToken as hayTokenMapillary } from '../lib/mapillary'
 
@@ -80,7 +80,7 @@ export default function Filtros({
 
       <div>
         <label htmlFor="plataforma" className="gr-eyebrow mb-1.5">
-          Plataforma asignada
+          Ámbito
         </label>
         <select
           id="plataforma"
@@ -89,7 +89,10 @@ export default function Filtros({
           className="w-full rounded border px-2 py-1.5 text-sm"
           style={campo}
         >
-          <option value="">Todo el cantón</option>
+          <option value="">Todo el cantón (urbano y rural)</option>
+          <option value={URBANO}>
+            Riobamba urbano · las {plataformas.length} plataformas
+          </option>
           {plataformas.map((p) => (
             <option key={p.clave} value={p.clave}>
               Plataforma {p.clave} · {p.areaHa.toFixed(0)} ha
@@ -231,7 +234,12 @@ export default function Filtros({
             Y dice «registrados» porque se leia al reves, como si fueran los
             que faltan: son los que YA estan en OpenStreetMap. */}
         <p className="gr-eyebrow mb-1.5">
-          Registrados por categoria{filtros.plataforma ? ` · plataforma ${filtros.plataforma}` : ''}
+          Registrados por categoria
+          {filtros.plataforma === URBANO
+            ? ' · Riobamba urbano'
+            : filtros.plataforma
+              ? ` · plataforma ${filtros.plataforma}`
+              : ''}
           {filtros.barrio ? ` · ${filtros.barrio}` : ''}
         </p>
         <p className="mb-1.5 text-[11px]" style={{ color: 'var(--gr-tinta-3)' }}>
