@@ -86,8 +86,17 @@ export const RADIO_COTEJO_M = 50
 /** Por debajo de este parecido de nombre la coincidencia no se da por buena. */
 export const UMBRAL_NOMBRE = 0.5
 
+/*
+ * `no-cache` no significa «sin cache»: significa revalidar antes de usarla.
+ * Estos archivos se sirven con un nombre fijo y diez minutos de cache, asi que
+ * tras publicar una capa corregida el navegador seguia dando la vieja mientras
+ * el codigo ya era el nuevo. Con la revalidacion, el ETag ahorra la descarga
+ * cuando el archivo no ha cambiado y la fuerza cuando si.
+ */
 async function traer(nombre: string): Promise<GeoJSON.FeatureCollection> {
-  const resp = await fetch(`${import.meta.env.BASE_URL}datos/${nombre}.geojson`)
+  const resp = await fetch(`${import.meta.env.BASE_URL}datos/${nombre}.geojson`, {
+    cache: 'no-cache',
+  })
   if (!resp.ok) throw new Error(`No se pudo cargar ${nombre}.geojson (${resp.status})`)
   return (await resp.json()) as GeoJSON.FeatureCollection
 }

@@ -39,7 +39,11 @@ interface CalleCruda {
 }
 
 export async function cargarCalles(senal?: AbortSignal): Promise<IndiceCalles> {
-  const resp = await fetch(`${import.meta.env.BASE_URL}datos/calles.json`, { signal: senal })
+  // Mismo motivo que en las capas municipales: revalidar antes de reusar.
+  const resp = await fetch(`${import.meta.env.BASE_URL}datos/calles.json`, {
+    signal: senal,
+    cache: 'no-cache',
+  })
   if (!resp.ok) throw new Error(`No se pudo cargar el índice de calles (${resp.status})`)
   const datos = (await resp.json()) as { generado: string | null; calles: CalleCruda[] }
   return {
