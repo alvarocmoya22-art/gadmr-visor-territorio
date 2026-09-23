@@ -40,6 +40,23 @@ export interface Resultado {
 const CLAVE_CACHE = 'gadmr.overpass.v2'
 const VIDA_CACHE_MS = 6 * 60 * 60 * 1000
 
+/**
+ * Vida de la copia cuando la base que se consiguió viene atrasada.
+ *
+ * El espejo que va al día se cae a ratos —devuelve 504 y un minuto después
+ * responde en menos de un segundo— y entonces el visor se queda con el de
+ * respaldo, que puede ir meses por detrás. Guardar eso seis horas condena toda
+ * la mañana a datos viejos aunque el bueno vuelva enseguida. Veinte minutos
+ * bastan para no machacar los espejos y para que al volver a entrar se intente
+ * otra vez.
+ */
+const VIDA_CACHE_ATRASADA_MS = 20 * 60 * 1000
+
+/** Intentos por espejo antes de pasar al siguiente. */
+const INTENTOS = 2
+/** Espera entre intentos, en milisegundos. */
+const ESPERA_REINTENTO_MS = 1500
+
 /** Etiquetas que se conservan; el resto se descarta para no inflar la caché. */
 const TAGS_RELEVANTES = [
   'name', 'amenity', 'shop', 'healthcare', 'highway', 'public_transport', 'leisure',
@@ -154,7 +171,12 @@ function leerCache(): Resultado | null {
     if (!bruto) return null
     const guardado = JSON.parse(bruto) as Resultado
     if (!guardado.puntos?.length) return null // cache inservible de un espejo fallido
-    if (Date.now() - new Date(guardado.obtenido).getTime() > VIDA_CACHE_MS) return null
+    const retrasoGuardado = retrasoEnDias(guardado.selloOsm)
+    const vida =
+      retrasoGuardado !== null && retrasoGuardado > DIAS_TOLERADOS
+        ? VIDA_CACHE_ATRASADA_MS
+        : VIDA_CACHE_MS
+    if (Date.now() - new Date(guardado.obtenido).getTime() > vida) return null
     // La frescura se recalcula: depende de la fecha de hoy, no de la descarga.
     guardado.puntos = guardado.puntos.map((p) => ({ ...p, frescura: frescuraDe(p.checkDate) }))
     guardado.diasDeRetraso = retrasoEnDias(guardado.selloOsm)
@@ -184,6 +206,40 @@ export function limpiarCache() {
  * Descarga los puntos del cantón. Rota entre espejos ante fallo o límite de
  * peticiones. `forzar` ignora la caché local de 6 h.
  */
+/**
+ * Un fallo que puede desaparecer solo: el servidor saturado o la red. Un 400
+ * no lo es —la consulta está mal y reintentarla da igual—, y un 429 tampoco
+ * conviene repetirlo enseguida porque es justo lo contrario de lo que pide.
+ */
+function vuelveAIntentarse(estado: number): boolean {
+  return estado === 502 || estado === 503 || estado === 504 || estado === 0
+}
+
+/** Pide a un espejo, reintentando los fallos que suelen ser pasajeros. */
+async function pedirA(espejo: string, consulta: string): Promise<Response> {
+  let ultima: Response | null = null
+  for (let intento = 1; intento <= INTENTOS; intento++) {
+    let resp: Response
+    try {
+      resp = await fetch(espejo, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+        body: consulta,
+      })
+    } catch (e) {
+      // Red caída o abortado: cuenta como transitorio.
+      if (intento === INTENTOS) throw e
+      await new Promise((r) => setTimeout(r, ESPERA_REINTENTO_MS))
+      continue
+    }
+    if (resp.ok || !vuelveAIntentarse(resp.status) || intento === INTENTOS) return resp
+    ultima = resp
+    await new Promise((r) => setTimeout(r, ESPERA_REINTENTO_MS))
+  }
+  // Inalcanzable: el bucle sale por return o por throw.
+  return ultima as Response
+}
+
 export async function obtenerPuntos(forzar = false): Promise<Resultado> {
   if (!forzar) {
     const cache = leerCache()
@@ -197,11 +253,7 @@ export async function obtenerPuntos(forzar = false): Promise<Resultado> {
 
   for (const espejo of ESPEJOS_OVERPASS) {
     try {
-      const resp = await fetch(espejo, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
-        body: consulta,
-      })
+      const resp = await pedirA(espejo, consulta)
       if (!resp.ok) {
         ultimoError = new Error(`${espejo} respondió ${resp.status}`)
         continue

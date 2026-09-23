@@ -466,9 +466,10 @@ export default function App() {
           <p className="gr-nota gr-nota--aviso">
             Los datos vienen de una copia de OpenStreetMap con{' '}
             <b>{numero(datos.diasDeRetraso ?? 0)} días de retraso</b> (base al{' '}
-            {fecha(datos.selloOsm ?? undefined)}). Ningún espejo respondió con la base al día, así
-            que se usó el menos atrasado. Lo levantado en campo estos días puede no aparecer
-            todavía: pulse «Actualizar desde OSM» más tarde.
+            {fecha(datos.selloOsm ?? undefined)}). El espejo que va al día responde de forma
+            intermitente y esta vez no contestó, así que se usó el menos atrasado de los que sí.
+            Lo levantado en campo estos días puede no aparecer todavía: pulse{' '}
+            <b>Actualizar desde OSM</b>, que suele bastar con reintentar.
           </p>
         </div>
       )}
