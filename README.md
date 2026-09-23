@@ -133,12 +133,6 @@ plataforma mostraba 437 registros con 82,8 % levantado y al rato 57 con 0 %**.
 
 No era el tablero: era qué espejo respondía.
 
-| Espejo | Base OSM observada |
-|---|---|
-| overpass-api.de | la del día |
-| overpass.kumi.systems | llegó a ir **tres meses atrasada** |
-| overpass.osm.ch | roto: responde `200` con lista vacía y sello `"34"` |
-
 El visor se quedaba con el primero que contestara. Si contestaba el atrasado, se
 veía un Riobamba de tres meses antes —menos puntos y casi ningún `check_date`—
 sin que nada lo indicara.
@@ -151,6 +145,41 @@ actual.
 
 Por eso la cabecera muestra siempre la fecha de la base OSM que respondió: no es
 un adorno, es lo que permite saber si dos personas están mirando lo mismo.
+
+### Dos de los tres espejos nunca sirvieron
+
+Comprobado contra Riobamba el 23/09/2026, consultando cada uno desde el
+navegador:
+
+| Espejo | Resultado | Qué se hizo |
+|---|---|---|
+| `overpass-api.de` | base al día, 764 ms… y `504` un minuto antes | se queda, el primero |
+| `maps.mail.ru/osm/tools/overpass` | base al día, 12–28 s, CORS correcto | **se añade** |
+| `overpass.kumi.systems` | sin respuesta; ya no figura entre las instancias públicas activas | se quita |
+| `overpass.osm.ch` | `200` en medio segundo con **cero elementos** | se quita |
+
+El de Suiza merece una explicación, porque durante meses pareció una avería:
+**`overpass.osm.ch` solo sirve datos suizos**. Devolvía cero elementos para
+Riobamba porque Riobamba no está en su base, no porque estuviera roto. El sello
+inservible —`"34"`, luego `"117224"`— despistó todavía más. Nunca debió estar
+en la lista.
+
+También se probaron y descartaron `overpass.private.coffee` (falla tras 85 s),
+`overpass.osm.jp`, `overpass.osm.ne.jp`, `overpass.nchc.org.tw` y
+`overpass.monicz.dev`. Las demás instancias del wiki con cobertura mundial
+exigen clave de pago.
+
+### El bueno se cae a ratos, así que se reintenta
+
+`overpass-api.de` va al día pero está sobrecargado —el propio wiki de OSM avisa
+de que no se espere alta fiabilidad—. Un `502`, `503`, `504` o una caída de red
+**ya no descartan el espejo**: se reintenta una vez más antes de pasar al
+siguiente. Un `400` no se reintenta, que ahí la consulta está mal.
+
+Y la copia atrasada **caduca a los 20 minutos en vez de a las 6 horas**. Un
+único fallo del espejo bueno llegó a condenar toda una mañana a datos de 58 días
+antes, aunque volviera a estar disponible al minuto siguiente. Una copia al día
+sí conserva las 6 horas, para no machacar los espejos en cada recarga.
 
 ## Mapas base y filtro por barrio
 

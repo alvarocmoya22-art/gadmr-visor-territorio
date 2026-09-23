@@ -26,10 +26,23 @@ export const VISTA_INICIAL = {
 }
 
 /** Espejos de Overpass, en orden de preferencia; se rota ante fallo o 429. */
+/**
+ * Espejos de Overpass, en orden de preferencia. Los dos van al dia y los dos
+ * se saturan a ratos, asi que el orden es por velocidad habitual, no por
+ * confianza: si el primero no contesta, el segundo trae lo mismo.
+ *
+ * Aqui solo entran instancias con cobertura MUNDIAL y verificadas contra
+ * Riobamba. Se quitaron dos que estuvieron meses sin aportar nada:
+ *
+ *  - overpass.osm.ch solo sirve datos de Suiza. Respondia 200 en medio
+ *    segundo con cero elementos y un sello inservible, y parecia averiado
+ *    cuando en realidad nunca debio estar en esta lista.
+ *  - overpass.kumi.systems dejo de responder y ya no figura entre las
+ *    instancias publicas activas del wiki de OSM.
+ */
 export const ESPEJOS_OVERPASS = [
   'https://overpass-api.de/api/interpreter',
-  'https://overpass.kumi.systems/api/interpreter',
-  'https://overpass.osm.ch/api/interpreter',
+  'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
 ]
 
 /** Umbrales de frescura del dato, en meses desde `check_date`. */
