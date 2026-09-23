@@ -6,12 +6,6 @@ interface Props {
   totalCanton: number
   equipamientos: number
   equipPorVerificar: number
-  /** Territorio del que hablan las cifras, p. ej. «Plataforma D». */
-  ambito: string
-  /** Segunda linea del ambito: superficie, barrios, lo que lo sitúe. */
-  ambitoDetalle: string
-  /** Vuelve al ambito de partida; null cuando ya se esta en el. */
-  onQuitarFiltro: (() => void) | null
 }
 
 function Kpi({
@@ -49,38 +43,13 @@ export default function PanelKpis({
   totalCanton,
   equipamientos,
   equipPorVerificar,
-  ambito,
-  ambitoDetalle,
-  onQuitarFiltro,
 }: Props) {
   const pctVerificado = resumen.total ? (resumen.verificados / resumen.total) * 100 : 0
   const filtrado = resumen.total !== totalCanton
 
   return (
     <section aria-label="Indicadores del levantamiento">
-      {/* Cinco cifras sin decir de donde son se leen como si fueran del canton
-          entero. El titulo del ambito va aqui arriba, pegado a ellas, no solo
-          dentro del panel de filtros donde hay que ir a buscarlo. */}
-      <div className="mb-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <h2 className="text-[15px] font-bold" style={{ color: 'var(--gr-tinta)' }}>
-          {ambito}
-        </h2>
-        <p className="gr-num text-[12px]" style={{ color: 'var(--gr-tinta-3)' }}>
-          {ambitoDetalle}
-        </p>
-        {onQuitarFiltro && (
-          <button
-            type="button"
-            className="text-[12px] underline"
-            style={{ color: 'var(--gr-info)' }}
-            onClick={onQuitarFiltro}
-          >
-            Quitar el filtro
-          </button>
-        )}
-      </div>
-
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
         <Kpi
           valor={numero(resumen.total)}
           rotulo="Registros en vista"

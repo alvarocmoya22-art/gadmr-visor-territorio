@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Mapa, { type CapasVisibles, type MapaCalor } from './components/Mapa'
 import PanelKpis from './components/PanelKpis'
+import CabeceraAmbito from './components/CabeceraAmbito'
 import Filtros from './components/Filtros'
 import Pestanas, { type Pestana } from './components/Pestanas'
 import BuscadorCalles from './components/BuscadorCalles'
@@ -418,14 +419,13 @@ export default function App() {
         </button>
       </header>
 
+      {/* El ambito va arriba, pegado al mapa: es lo primero que hay que saber
+          para leer todo lo demas. Las cifras, en cambio, bajaron debajo del
+          mapa, que es lo que se mira. */}
       <div className="px-4 pt-3">
-        <PanelKpis
-          resumen={resumen}
-          totalCanton={todos.length}
-          equipamientos={equipFiltrados.length}
-          equipPorVerificar={porVerificar.length}
+        <CabeceraAmbito
           ambito={ambitoTitulo}
-          ambitoDetalle={ambitoDetalle}
+          detalle={ambitoDetalle}
           // Se vuelve al ambito de partida, no a todo el canton: el visor abre
           // en el urbano y ahi es donde se espera regresar.
           onQuitarFiltro={
@@ -491,8 +491,11 @@ export default function App() {
       )}
 
       <main className="grid gap-3 p-4 lg:min-h-0 lg:flex-1 lg:grid-cols-[1fr_380px]">
+        {/* El mapa manda y las cifras van debajo. Arriba ocupaban una franja
+            fija que el mapa no recuperaba nunca, y es el mapa lo que se mira. */}
+        <div className="flex flex-col gap-3 lg:min-h-0">
         <section
-          className="relative h-[60vh] min-h-[340px] overflow-hidden rounded lg:h-auto"
+          className="relative h-[60vh] min-h-[340px] overflow-hidden rounded lg:h-auto lg:flex-1"
           style={{ border: '1px solid var(--gr-linea-fuerte)' }}
         >
           <Mapa
@@ -547,6 +550,14 @@ export default function App() {
             </div>
           )}
         </section>
+
+          <PanelKpis
+            resumen={resumen}
+            totalCanton={todos.length}
+            equipamientos={equipFiltrados.length}
+            equipPorVerificar={porVerificar.length}
+          />
+        </div>
 
         <aside
           className="flex flex-col overflow-hidden rounded lg:min-h-0"

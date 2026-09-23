@@ -719,7 +719,19 @@ export default function Mapa({
       setMapaListo(true)
     })
 
+    /*
+     * MapLibre mide el contenedor al crearse y no vuelve a mirarlo. Con el
+     * mapa dentro de una columna flexible —cifras debajo, panel al lado— el
+     * alto cambia despues del montaje y el lienzo se quedaba a su tamano
+     * inicial: 71 x 338 pixeles dentro de un hueco de 975 x 606. Observar el
+     * contenedor lo arregla para cualquier cambio de tamano, venga de un
+     * cambio de layout o de que el usuario redimensione la ventana.
+     */
+    const observador = new ResizeObserver(() => m.resize())
+    observador.observe(contenedor.current)
+
     return () => {
+      observador.disconnect()
       for (const r of rotulos.current) r.remove()
       rotulos.current = []
       marcaFoto.current?.remove()
