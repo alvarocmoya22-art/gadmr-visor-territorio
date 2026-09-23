@@ -60,6 +60,10 @@ interface Props {
   mapaCalor: MapaCalor
   /** Coropleta de distancia al equipamiento más cercano; null para no dibujarla. */
   deficit: GeoJSON.FeatureCollection | null
+  /** Coropleta de parte del barrio dentro del radio de servicio. */
+  cobertura: GeoJSON.FeatureCollection | null
+  /** Círculos de alcance de cada equipamiento, para enseñar de dónde sale. */
+  alcance: GeoJSON.FeatureCollection | null
   /** Cruce activo de dos categorías; null cuando no hay ninguno. */
   cruce: CruceMapa | null
   /** Pinchar un barrio de la coropleta lo pone en el filtro. */
@@ -113,6 +117,21 @@ const ESCALA_DEFICIT = [
   500, COLORES_DEFICIT[2],
   750, COLORES_DEFICIT[3],
   1000, COLORES_DEFICIT[4],
+] as unknown as ExpressionSpecification
+
+/**
+ * Escala de cobertura, en porcentaje de barrio dentro del radio de servicio.
+ * Verde y no azul para que no se confunda con la coropleta de distancia: son
+ * dos preguntas distintas y no deben leerse como la misma.
+ */
+const COLORES_COBERTURA = ['#eef4ef', '#c9e3d0', '#95c9a8', '#55a87a', '#1b6046']
+const ESCALA_COBERTURA = [
+  'step', ['get', 'cubierto'],
+  COLORES_COBERTURA[0],
+  20, COLORES_COBERTURA[1],
+  40, COLORES_COBERTURA[2],
+  60, COLORES_COBERTURA[3],
+  80, COLORES_COBERTURA[4],
 ] as unknown as ExpressionSpecification
 
 /** Color de la capa de fotografia de calle; en la leyenda va rotulada. */
@@ -260,6 +279,8 @@ export default function Mapa({
   calleElegida,
   mapaCalor,
   deficit,
+  cobertura,
+  alcance,
   cruce,
   onElegirBarrio,
 }: Props) {
@@ -327,6 +348,24 @@ export default function Mapa({
         id: 'deficit-linea',
         type: 'line',
         source: 'deficit',
+        layout: { visibility: 'none' },
+        paint: { 'line-color': '#ffffff', 'line-width': 1, 'line-opacity': 0.8 },
+      })
+
+      // ── Cobertura por radio de servicio. Comparte sitio con el déficit:
+      // las dos pintan los mismos barrios y solo una puede estar encendida.
+      m.addSource('cobertura', { type: 'geojson', data: VACIO })
+      m.addLayer({
+        id: 'cobertura-relleno',
+        type: 'fill',
+        source: 'cobertura',
+        layout: { visibility: 'none' },
+        paint: { 'fill-color': ESCALA_COBERTURA, 'fill-opacity': 0.72 },
+      })
+      m.addLayer({
+        id: 'cobertura-linea',
+        type: 'line',
+        source: 'cobertura',
         layout: { visibility: 'none' },
         paint: { 'line-color': '#ffffff', 'line-width': 1, 'line-opacity': 0.8 },
       })
@@ -519,6 +558,23 @@ export default function Mapa({
         },
       })
 
+      // ── Alcance de cada equipamiento. Va en linea y sin relleno: con
+      // trescientos circulos superpuestos, el relleno se acumula y la mancha
+      // acaba diciendo mas de los solapes que de la cobertura.
+      m.addSource('alcance', { type: 'geojson', data: VACIO })
+      m.addLayer({
+        id: 'alcance-linea',
+        type: 'line',
+        source: 'alcance',
+        layout: { visibility: 'none' },
+        paint: {
+          'line-color': '#1b6046',
+          'line-width': 1,
+          'line-opacity': 0.55,
+          'line-dasharray': [2, 2],
+        },
+      })
+
       // ── Mapas de calor. Se alimentan de las mismas fuentes que los
       // puntos, asi que respetan los filtros sin ningun trabajo extra.
       // Van debajo de 'pois-halo' para que la mancha no tape los puntos.
@@ -592,6 +648,30 @@ export default function Mapa({
           )
           .addTo(m)
       })
+      m.on('mousemove', 'cobertura-relleno', (e) => {
+        const f = e.features?.[0]
+        if (!f) return
+        m.getCanvas().style.cursor = 'pointer'
+        const pct = Number(f.properties?.cubierto ?? 0)
+        globo
+          .setLngLat(e.lngLat)
+          .setHTML(
+            `<b>${String(f.properties?.nombre ?? '')}</b><br>` +
+              `${pct} % del barrio dentro del radio`,
+          )
+          .addTo(m)
+      })
+      m.on('mouseleave', 'cobertura-relleno', () => {
+        m.getCanvas().style.cursor = ''
+        globo.remove()
+      })
+      m.on('click', 'cobertura-relleno', (e) => {
+        const encima = ['pois', 'equipamientos', 'mly-fotos'].filter((c) => m.getLayer(c))
+        if (m.queryRenderedFeatures(e.point, { layers: encima }).length > 0) return
+        const f = e.features?.[0]
+        if (f) cb.current.onElegirBarrio(String(f.properties?.nombre ?? ''))
+      })
+
       m.on('mouseleave', 'deficit-relleno', () => {
         m.getCanvas().style.cursor = ''
         globo.remove()
@@ -730,6 +810,16 @@ export default function Mapa({
     })
   }, [deficit, mapaListo])
 
+  // Cobertura y alcance: se calculan fuera y aquí solo se dibujan.
+  useEffect(() => {
+    cuandoListo((m) => {
+      ;(m.getSource('cobertura') as maplibregl.GeoJSONSource | undefined)?.setData(
+        cobertura ?? VACIO,
+      )
+      ;(m.getSource('alcance') as maplibregl.GeoJSONSource | undefined)?.setData(alcance ?? VACIO)
+    })
+  }, [cobertura, alcance, mapaListo])
+
   // Puntos de A que quedan fuera del umbral del cruce.
   useEffect(() => {
     cuandoListo((m) => {
@@ -768,6 +858,9 @@ export default function Mapa({
       poner('calor-equipamientos', mapaCalor === 'equipamientos')
       poner('deficit-relleno', deficit !== null)
       poner('deficit-linea', deficit !== null)
+      poner('cobertura-relleno', cobertura !== null)
+      poner('cobertura-linea', cobertura !== null)
+      poner('alcance-linea', alcance !== null)
       poner('cruce-alerta', cruce !== null && capas.osm)
 
       /*
@@ -793,7 +886,7 @@ export default function Mapa({
         r.getElement().style.display = capas.plataformas ? '' : 'none'
       }
     })
-  }, [capas, mapaCalor, deficit, cruce, mapaListo])
+  }, [capas, mapaCalor, deficit, cobertura, alcance, cruce, mapaListo])
 
   /**
    * Plataforma activa: se rellena, se engruesa su contorno, las demás se

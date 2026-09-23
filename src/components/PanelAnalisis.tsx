@@ -1,11 +1,26 @@
 import { CATEGORIAS, colorSerie, POR_CLAVE, type ClaveCategoria } from '../lib/categorias'
-import { numero } from '../lib/format'
+import { numero, porcentaje } from '../lib/format'
 import type { Cruce, Deficit, Hallazgo } from '../lib/analisis'
+import {
+  EQUIVALENTE_OSM,
+  RADIOS,
+  type Cobertura,
+  type FuenteCobertura,
+} from '../lib/cobertura'
+
+/** Qué se pinta sobre los barrios; solo cabe una cosa a la vez. */
+export type CapaBarrios = 'ninguna' | 'deficit' | 'cobertura'
 
 /** Lo que el usuario ha elegido analizar. Vive en App y se pasa entero. */
 export interface EstadoAnalisis {
-  /** Coropleta de distancia al equipamiento más cercano. */
-  deficit: boolean
+  /** Coropleta activa sobre los barrios. */
+  capaBarrios: CapaBarrios
+  /** Tipo de equipamiento del que se mide la cobertura. */
+  tipo: string
+  /** Radio de servicio en metros. */
+  radio: number
+  /** De dónde salen los equipamientos que cuentan como servicio. */
+  fuente: FuenteCobertura
   /** Cruce de dos categorías encendido. */
   cruce: boolean
   a: ClaveCategoria
@@ -17,13 +32,25 @@ export interface EstadoAnalisis {
 }
 
 export const ANALISIS_INICIAL: EstadoAnalisis = {
-  deficit: false,
+  capaBarrios: 'ninguna',
+  tipo: 'educativo',
+  radio: 500,
+  fuente: 'gadm',
   cruce: false,
   a: 'comercio',
   b: 'salud',
   umbral: 500,
   hallazgos: 'salud',
 }
+
+/** Tramos de la escala de cobertura; los colores son los de la capa del mapa. */
+const TRAMOS_COBERTURA = [
+  { color: '#eef4ef', rotulo: 'menos del 20 %' },
+  { color: '#c9e3d0', rotulo: '20 a 40 %' },
+  { color: '#95c9a8', rotulo: '40 a 60 %' },
+  { color: '#55a87a', rotulo: '60 a 80 %' },
+  { color: '#1b6046', rotulo: 'más del 80 %' },
+]
 
 /** Tramos de la escala del déficit; los colores son los de la capa del mapa. */
 const TRAMOS = [
@@ -40,6 +67,9 @@ interface Props {
   analisis: EstadoAnalisis
   onAnalisis: (a: EstadoAnalisis) => void
   deficit: Deficit | null
+  cobertura: Cobertura | null
+  /** Tipos del inventario en el ámbito, con cuántos hay de cada uno. */
+  tipos: { tipo: string; n: number }[]
   cruce: Cruce | null
   hallazgos: Hallazgo[]
   /** Ámbito sobre el que se calcula todo, para decirlo en los rótulos. */
@@ -60,6 +90,8 @@ export default function PanelAnalisis({
   analisis,
   onAnalisis,
   deficit,
+  cobertura,
+  tipos,
   cruce,
   hallazgos,
   ambito,
@@ -84,24 +116,208 @@ export default function PanelAnalisis({
         </p>
       </div>
 
-      {/* ───────────────────────────── 1. déficit de equipamiento por barrio */}
+      {/* ──────────────────────── 1. lo que se pinta sobre los barrios */}
       <section>
-        <label
-          className="flex items-center gap-2 text-[13px] font-semibold"
-          style={{ color: 'var(--gr-tinta)' }}
-        >
-          <input
-            type="checkbox"
-            checked={analisis.deficit}
-            onChange={(e) => cambiar({ deficit: e.target.checked })}
-          />
-          Déficit de equipamiento por barrio
+        <label htmlFor="capa-barrios" className="gr-eyebrow mb-1.5">
+          Análisis por barrio
         </label>
-        <p className="mt-1 text-[11px]" style={{ color: 'var(--gr-tinta-3)' }}>
-          Pinta cada barrio según lo lejos que le queda el equipamiento municipal más cercano.
-        </p>
+        <select
+          id="capa-barrios"
+          value={analisis.capaBarrios}
+          onChange={(e) => cambiar({ capaBarrios: e.target.value as CapaBarrios })}
+          className="w-full rounded border px-2 py-1.5 text-sm"
+          style={campo}
+        >
+          <option value="ninguna">Sin capa por barrio</option>
+          <option value="deficit">Distancia al equipamiento más cercano</option>
+          <option value="cobertura">Cobertura por radio de servicio</option>
+        </select>
 
-        {analisis.deficit && deficit && (
+        {/* ── cobertura por área de influencia */}
+        {analisis.capaBarrios === 'cobertura' && (
+          <div className="mt-2 space-y-2">
+            <p className="text-[11px]" style={{ color: 'var(--gr-tinta-3)' }}>
+              Qué parte de cada barrio queda dentro del radio de servicio de algún equipamiento
+              del tipo elegido.
+            </p>
+
+            <label className="block text-[11px]" style={{ color: 'var(--gr-tinta-3)' }}>
+              Tipo de equipamiento
+              <select
+                value={analisis.tipo}
+                onChange={(e) => cambiar({ tipo: e.target.value })}
+                className="mt-0.5 w-full rounded border px-2 py-1.5 text-[13px]"
+                style={campo}
+              >
+                {tipos.map((t) => (
+                  <option key={t.tipo} value={t.tipo}>
+                    {t.tipo} · {numero(t.n)}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <div>
+              <p className="text-[11px]" style={{ color: 'var(--gr-tinta-3)' }}>
+                Radio de servicio
+              </p>
+              <div className="mt-1 grid grid-cols-3 gap-1">
+                {RADIOS.map((r) => (
+                  <button
+                    key={r}
+                    type="button"
+                    onClick={() => cambiar({ radio: r })}
+                    aria-pressed={analisis.radio === r}
+                    className="gr-num rounded border px-1 py-1 text-[12px]"
+                    style={{
+                      borderColor: analisis.radio === r ? 'var(--gr-info)' : 'var(--gr-linea-fuerte)',
+                      background: analisis.radio === r ? 'var(--gr-info)' : 'var(--gr-superficie)',
+                      color: analisis.radio === r ? '#ffffff' : 'var(--gr-tinta-2)',
+                    }}
+                  >
+                    {r} m
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <label className="block text-[11px]" style={{ color: 'var(--gr-tinta-3)' }}>
+              Contar como servicio
+              <select
+                value={analisis.fuente}
+                onChange={(e) => cambiar({ fuente: e.target.value as FuenteCobertura })}
+                className="mt-0.5 w-full rounded border px-2 py-1.5 text-[13px]"
+                style={campo}
+                disabled={!EQUIVALENTE_OSM[analisis.tipo]}
+              >
+                <option value="gadm">Solo el inventario del GADM</option>
+                <option value="osm">Solo lo registrado en OSM</option>
+                <option value="ambas">Las dos fuentes juntas</option>
+              </select>
+            </label>
+            {!EQUIVALENTE_OSM[analisis.tipo] && (
+              <p className="text-[11px]" style={{ color: 'var(--gr-tinta-3)' }}>
+                Este tipo no tiene equivalente claro en OSM, así que se cuenta solo el inventario.
+              </p>
+            )}
+
+            {cobertura && (
+              <>
+                <dl className="grid grid-cols-3 gap-2 text-center">
+                  {(cobertura.poblacion > 0
+                    ? [
+                        {
+                          t: 'de la población cubierta',
+                          v: porcentaje((cobertura.poblacionCubierta / cobertura.poblacion) * 100),
+                        },
+                        { t: 'personas fuera', v: numero(cobertura.poblacion - cobertura.poblacionCubierta) },
+                        { t: 'equipamientos', v: numero(cobertura.servicios) },
+                      ]
+                    : [
+                        { t: 'del área cubierta', v: porcentaje(cobertura.total * 100) },
+                        { t: 'barrios sin nada', v: numero(cobertura.sinNada) },
+                        { t: 'equipamientos', v: numero(cobertura.servicios) },
+                      ]
+                  ).map((c) => (
+                    <div key={c.t}>
+                      <dd
+                        className="gr-num text-[16px] font-bold"
+                        style={{ color: 'var(--gr-tinta)' }}
+                      >
+                        {c.v}
+                      </dd>
+                      <dt className="text-[10px]" style={{ color: 'var(--gr-tinta-3)' }}>
+                        {c.t}
+                      </dt>
+                    </div>
+                  ))}
+                </dl>
+
+                {cobertura.poblacion > 0 && (
+                  <p className="text-[11px]" style={{ color: 'var(--gr-tinta-3)' }}>
+                    {numero(cobertura.poblacionCubierta)} de {numero(cobertura.poblacion)} habitantes
+                    · {porcentaje(cobertura.total * 100)} de la superficie ·{' '}
+                    {numero(cobertura.poblacionSinNada)} viven en barrios sin ninguna cobertura.
+                  </p>
+                )}
+
+                {cobertura.fuente === 'ambas' && (
+                  <p className="text-[11px]" style={{ color: 'var(--gr-tinta-3)' }}>
+                    {numero(cobertura.deGadm)} del inventario y {numero(cobertura.deOsm)} de OSM.
+                  </p>
+                )}
+
+                <ul className="space-y-0.5">
+                  {TRAMOS_COBERTURA.map((t) => (
+                    <li key={t.rotulo} className="flex items-center gap-2 text-[12px]">
+                      <span
+                        aria-hidden
+                        className="h-3 w-5 shrink-0 rounded-sm"
+                        style={{ background: t.color, border: '1px solid rgba(0,0,0,.15)' }}
+                      />
+                      <span style={{ color: 'var(--gr-tinta-3)' }}>{t.rotulo}</span>
+                    </li>
+                  ))}
+                </ul>
+
+                {cobertura.filas.length > 0 && (
+                  <>
+                    <p className="gr-eyebrow mb-1">
+                      {cobertura.poblacion > 0 ? 'Donde queda más gente fuera' : 'Los peor cubiertos'}
+                    </p>
+                    <ul className="max-h-[22vh] overflow-auto">
+                      {cobertura.filas.slice(0, 12).map((f) => (
+                        <li key={f.nombre}>
+                          <button
+                            type="button"
+                            onClick={() => onElegirBarrio(f.nombre)}
+                            className="flex w-full items-center gap-2 rounded px-1 py-1 text-left text-[12px] hover:bg-black/5"
+                          >
+                            <span
+                              className="min-w-0 flex-1 truncate"
+                              style={{ color: 'var(--gr-tinta-2)' }}
+                            >
+                              {f.nombre}
+                            </span>
+                            <span
+                              className="gr-num shrink-0"
+                              style={{
+                                color: f.cubierto === 0 ? 'var(--gr-error)' : 'var(--gr-tinta-3)',
+                              }}
+                            >
+                              {cobertura.poblacion > 0
+                                ? `${numero(Math.round(f.pob - f.pobCubierta))} hab`
+                                : porcentaje(f.cubierto * 100)}
+                            </span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+
+                {/* Un porcentaje de cobertura invita a citarse tal cual. Las
+                    tres limitaciones van pegadas al numero, no en una ayuda
+                    aparte que nadie abre. */}
+                <p className="gr-nota">
+                  Medido en línea recta, con todos los equipamientos pesando igual —sin su
+                  capacidad— y repartiendo la población uniformemente dentro de cada barrio. El
+                  radio es un valor de partida: fíjelo contra el estándar urbanístico del PUGS
+                  antes de llevar la cifra a un informe.
+                  {cobertura.poblacion > 0 && ' Población: INEC, Censo 2022.'}
+                </p>
+              </>
+            )}
+          </div>
+        )}
+
+        {analisis.capaBarrios === 'deficit' && (
+          <p className="mt-2 text-[11px]" style={{ color: 'var(--gr-tinta-3)' }}>
+            Pinta cada barrio según lo lejos que le queda el equipamiento municipal más cercano.
+          </p>
+        )}
+
+        {analisis.capaBarrios === 'deficit' && deficit && (
           <>
             <ul className="mt-2 space-y-0.5">
               {TRAMOS.map((t) => (

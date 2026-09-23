@@ -26,6 +26,16 @@ export interface Barrio {
   /** Cuantos poligonos sueltos componen el barrio. */
   piezas: number
   /**
+   * Habitantes del Censo 2022 repartidos a este barrio. Cero cuando el barrio
+   * no recibio ningun edificio, que en suelo urbano suele querer decir que no
+   * hay nadie viviendo ahi, no que falte el dato.
+   */
+  pob: number
+  /** Viviendas particulares ocupadas. */
+  viv: number
+  /** Poblacion en viviendas con acceso a servicios publicos basicos. */
+  pobServB: number
+  /**
    * Punto dentro del barrio, cerca de su centro. Se calcula una vez al cargar
    * porque de él dependen tanto la plataforma como las distancias del
    * análisis, y recorrer 204 polígonos en cada cambio de filtro se nota.
@@ -60,6 +70,21 @@ export interface Cotejo {
   parecido: number
 }
 
+/**
+ * Agregado de poblacion por barrio y plataforma.
+ *
+ * Lo produce `scripts/poblacion_barrios.py` a partir del Censo 2022. Al
+ * proyecto solo llega este resumen, nunca la capa de sectores del INEC: sus
+ * condiciones de uso son de copyright y este repositorio es publico.
+ */
+export interface Poblacion {
+  fuente: string
+  metodo: string
+  canton: { pob: number; sectores: number }
+  barrios: Record<string, { pob: number; viv: number; pobServB: number; edificios: number }>
+  plataformas: Record<string, { pob: number; viv: number }>
+}
+
 export interface CapasMunicipales {
   plataformas: Plataforma[]
   barriosLista: Barrio[]
@@ -67,6 +92,8 @@ export interface CapasMunicipales {
   parroquias: GeoJSON.FeatureCollection
   barrios: GeoJSON.FeatureCollection
   plataformasGeo: GeoJSON.FeatureCollection
+  /** null si el archivo no esta; el visor sigue funcionando sin poblacion. */
+  poblacion: Poblacion | null
 }
 
 /**
@@ -152,6 +179,9 @@ function aBarrios(fc: GeoJSON.FeatureCollection): Barrio[] {
         piezas: 1,
         centro: [0, 0], // se rellena al terminar de unir las piezas
         plataforma: null,
+        pob: 0,
+        viv: 0,
+        pobServB: 0,
       })
     }
   }
@@ -245,12 +275,28 @@ export function cotejar(eq: { nombre: string; lon: number; lat: number }, osm: P
   }
 }
 
+/**
+ * Trae el agregado de poblacion. Que falte no es un error: el visor funciona
+ * igual sin el, solo sin los indicadores por habitante.
+ */
+async function traerPoblacion(): Promise<Poblacion | null> {
+  try {
+    const resp = await fetch(`${import.meta.env.BASE_URL}datos/poblacion.json`, {
+      cache: 'no-cache',
+    })
+    return resp.ok ? ((await resp.json()) as Poblacion) : null
+  } catch {
+    return null
+  }
+}
+
 export async function cargarCapas(): Promise<CapasMunicipales> {
-  const [plataformasGeo, parroquias, barrios, equipamientosGeo] = await Promise.all([
+  const [plataformasGeo, parroquias, barrios, equipamientosGeo, poblacion] = await Promise.all([
     traer('plataformas'),
     traer('parroquias'),
     traer('barrios'),
     traer('equipamientos'),
+    traerPoblacion(),
   ])
 
   const plataformas = aPlataformas(plataformasGeo)
@@ -263,6 +309,12 @@ export async function cargarCapas(): Promise<CapasMunicipales> {
   for (const b of barriosLista) {
     b.centro = puntoInterior(b.poligonos)
     b.plataforma = plataformaDe(b.centro[0], b.centro[1], plataformas)
+    const censo = poblacion?.barrios[b.nombre]
+    if (censo) {
+      b.pob = censo.pob
+      b.viv = censo.viv
+      b.pobServB = censo.pobServB
+    }
   }
 
   const equipamientos: EquipamientoMunicipal[] = equipamientosGeo.features.map((f, i) => {
@@ -283,7 +335,15 @@ export async function cargarCapas(): Promise<CapasMunicipales> {
     }
   })
 
-  return { plataformas, barriosLista, equipamientos, parroquias, barrios, plataformasGeo }
+  return {
+    plataformas,
+    barriosLista,
+    equipamientos,
+    parroquias,
+    barrios,
+    plataformasGeo,
+    poblacion,
+  }
 }
 
 /** Vuelve a cotejar todo el inventario contra los puntos de OSM recién cargados. */

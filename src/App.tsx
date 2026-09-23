@@ -23,6 +23,7 @@ import {
 } from './hooks/usePuntos'
 import { descargarCsv, descargarGeoJSON, descargarShapefile } from './lib/exportar'
 import { barriosDe, calcularDeficit, cruzar, hallazgosACsv, sinInventariar } from './lib/analisis'
+import { calcularCobertura, RADIO_SUGERIDO, tiposDisponibles } from './lib/cobertura'
 import { avancePorPlataforma, URBANO } from './lib/municipal'
 import { VISTA_INICIAL } from './config/riobamba'
 import { MAPA_BASE_INICIAL } from './config/mapasBase'
@@ -158,10 +159,38 @@ export default function App() {
   // mientras nadie la mire.
   const deficit = useMemo(
     () =>
-      analisis.deficit && capasMun
+      analisis.capaBarrios === 'deficit' && capasMun
         ? calcularDeficit(barriosAmbito, equipAmbito, ambitoPlataforma)
         : null,
-    [analisis.deficit, capasMun, barriosAmbito, equipAmbito, ambitoPlataforma],
+    [analisis.capaBarrios, capasMun, barriosAmbito, equipAmbito, ambitoPlataforma],
+  )
+
+  /**
+   * Cobertura por radio de servicio. Los tipos salen del inventario completo,
+   * no del ambito: si en la plataforma elegida no hay ningun centro de salud,
+   * el tipo tiene que seguir en la lista para poder ver justo eso.
+   */
+  const tipos = useMemo(() => tiposDisponibles(equipamientos), [equipamientos])
+
+  const cobertura = useMemo(
+    () =>
+      analisis.capaBarrios === 'cobertura' && capasMun
+        ? calcularCobertura(barriosAmbito, equipAmbito, ambitoPlataforma, {
+            tipo: analisis.tipo,
+            radio: analisis.radio,
+            fuente: analisis.fuente,
+          })
+        : null,
+    [
+      analisis.capaBarrios,
+      analisis.tipo,
+      analisis.radio,
+      analisis.fuente,
+      capasMun,
+      barriosAmbito,
+      equipAmbito,
+      ambitoPlataforma,
+    ],
   )
 
   const cruce = useMemo(
@@ -191,18 +220,23 @@ export default function App() {
   const ambitoTitulo = barrioSel ? `${zonaTitulo} · ${barrioSel.nombre}` : zonaTitulo
 
   const ha = (n: number) => `${numero(Math.round(n))} ha`
+  // Los habitantes del ambito, del Censo 2022. Cero mientras no cargue.
+  const pobAmbito = barrioSel
+    ? barrioSel.pob
+    : barriosAmbito.reduce((suma, b) => suma + b.pob, 0)
+  const hab = pobAmbito > 0 ? ` · ${numero(pobAmbito)} hab` : ''
   const ambitoDetalle = barrioSel
     ? // La plataforma solo se nombra si el titulo no la lleva ya delante.
       plataformaSel
-      ? ha(barrioSel.areaHa)
-      : `${ha(barrioSel.areaHa)} · ${
+      ? `${ha(barrioSel.areaHa)}${hab}`
+      : `${ha(barrioSel.areaHa)}${hab} · ${
           barrioSel.plataforma ? `plataforma ${barrioSel.plataforma}` : 'fuera de plataforma'
         }`
     : plataformaSel
-      ? `${ha(plataformaSel.areaHa)} · ${numero(barriosAmbito.length)} barrios`
+      ? `${ha(plataformaSel.areaHa)} · ${numero(barriosAmbito.length)} barrios${hab}`
       : filtros.plataforma === URBANO
-        ? `${numero(capasMun?.plataformas.length ?? 0)} plataformas · ${numero(barriosAmbito.length)} barrios`
-        : `urbano y rural · ${numero(barriosAmbito.length)} barrios`
+        ? `${numero(capasMun?.plataformas.length ?? 0)} plataformas · ${numero(barriosAmbito.length)} barrios${hab}`
+        : `urbano y rural · ${numero(barriosAmbito.length)} barrios${hab}`
 
   const ambitoRotulo = (() => {
     const zona =
@@ -247,6 +281,15 @@ export default function App() {
   }
 
   const elegirBarrio = (nombre: string) => cambiarFiltros({ ...filtros, barrio: nombre })
+
+  /*
+   * Cambiar de tipo trae consigo su radio de partida: una escuela y una
+   * unidad administrativa no sirven al mismo radio, y dejar el del tipo
+   * anterior daria una cobertura que nadie ha pedido.
+   */
+  const cambiarAnalisis = (a: EstadoAnalisis) => {
+    setAnalisis(a.tipo !== analisis.tipo ? { ...a, radio: RADIO_SUGERIDO[a.tipo] ?? a.radio } : a)
+  }
 
   const elegirPunto = (id: string | null) => {
     setFotoDelMapa(null)
@@ -462,6 +505,8 @@ export default function App() {
             mapaBase={mapaBase}
             mapaCalor={mapaCalor}
             deficit={deficit?.geo ?? null}
+            cobertura={cobertura?.geo ?? null}
+            alcance={cobertura?.alcance ?? null}
             cruce={
               cruce ? { a: cruce.a, b: cruce.b, desatendidos: cruce.desatendidos } : null
             }
@@ -535,8 +580,10 @@ export default function App() {
             {pestana === 'analisis' && (
               <PanelAnalisis
                 analisis={analisis}
-                onAnalisis={setAnalisis}
+                onAnalisis={cambiarAnalisis}
                 deficit={deficit}
+                cobertura={cobertura}
+                tipos={tipos}
                 cruce={cruce}
                 hallazgos={hallazgos}
                 ambito={ambitoRotulo}

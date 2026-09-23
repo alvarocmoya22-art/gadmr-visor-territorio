@@ -240,6 +240,58 @@ python scripts/convertir_shapefiles.py
 python scripts/indexar_calles.py
 ```
 
+## La población viene del Censo 2022, agregada
+
+El análisis de cobertura mide habitantes, no solo hectáreas. La población sale
+del **INEC, Censo de Población y Vivienda 2022**, de la capa de *sectores
+censales anonimizados con indicadores*, que trae `pob_t` (población total),
+`v_pres` (viviendas ocupadas), `p_hog` (tamaño del hogar) y los dos campos de
+servicios básicos. El cantón 0601 tiene **1.029 sectores y 260.882 habitantes**;
+dentro de las 18 plataformas viven **172.884**.
+
+### Al repositorio solo llega el agregado
+
+La capa del INEC **no se copia al proyecto**. Sus metadatos declaran
+`accessConstraints: copyright` y `useConstraints: copyright` bajo las «Políticas
+de uso de la información cartográfica estadística», y este repositorio es
+público: publicar los sectores sería redistribuir el dato, que no es lo mismo
+que usarlo. Lo que se versiona es `public/datos/poblacion.json` (14 KB), un
+resumen por barrio y por plataforma, con la fuente citada en el propio archivo y
+en la interfaz.
+
+### Reparto dasimétrico, no proporcional al área
+
+    población del sector ÷ edificios del sector = población por edificio
+    edificio → barrio que lo contiene
+    barrio = suma de sus edificios
+
+Repartir proporcional al área supone que la gente está esparcida por igual
+dentro del sector, y no lo está: un sector de borde urbano es mitad manzanas y
+mitad terreno vacío. Los **95.232 puntos de edificio** de la Geodatabase
+Nacional 2024 del INEC (capa `edif_p` del cantón 0601, EPSG:31992) dicen dónde
+hay construcción, así que la población va donde hay con qué habitarla. Los dos
+métodos dan 172.884 y 171.230 habitantes urbanos: un 1 % de diferencia que se
+concentra, como era de esperar, en los barrios de borde.
+
+Ninguno de los 95.232 edificios quedó fuera de un sector y ningún sector se
+quedó sin edificios, así que no hizo falta el reparto por área de reserva.
+
+**Dentro del barrio la población sí se reparte uniformemente** al calcular
+cobertura. Es un supuesto, pero mucho más inocente que hacerlo a nivel de
+sector: los barrios urbanos son pequeños y homogéneos.
+
+### Regenerar
+
+Requiere los dos archivos del INEC en el disco; las rutas están al principio del
+script:
+
+```bash
+python scripts/poblacion_barrios.py
+```
+
+Hay que volver a correrlo **cada vez que cambien los barrios**, porque la
+población se agrega por nombre de barrio.
+
 ## Descargar lo que se ve
 
 Los dos botones de la cabecera exportan **el recorte activo**, no todo el
