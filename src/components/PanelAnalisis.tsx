@@ -1,12 +1,8 @@
 import { CATEGORIAS, colorSerie, POR_CLAVE, type ClaveCategoria } from '../lib/categorias'
 import { numero, porcentaje } from '../lib/format'
 import type { Cruce, Deficit, Hallazgo } from '../lib/analisis'
-import {
-  EQUIVALENTE_OSM,
-  RADIOS,
-  type Cobertura,
-  type FuenteCobertura,
-} from '../lib/cobertura'
+import { EQUIVALENTE_OSM, type Cobertura, type FuenteCobertura } from '../lib/cobertura'
+import { claveNivel, nivelesMedibles, CITA_NORMA, NORMA } from '../lib/norma'
 
 /** Qué se pinta sobre los barrios; solo cabe una cosa a la vez. */
 export type CapaBarrios = 'ninguna' | 'deficit' | 'cobertura'
@@ -17,8 +13,8 @@ export interface EstadoAnalisis {
   capaBarrios: CapaBarrios
   /** Tipo de equipamiento del que se mide la cobertura. */
   tipo: string
-  /** Radio de servicio en metros. */
-  radio: number
+  /** Nivel de la norma elegido, por su clave; de él sale el radio. */
+  nivel: string
   /** De dónde salen los equipamientos que cuentan como servicio. */
   fuente: FuenteCobertura
   /** Cruce de dos categorías encendido. */
@@ -34,7 +30,7 @@ export interface EstadoAnalisis {
 export const ANALISIS_INICIAL: EstadoAnalisis = {
   capaBarrios: 'ninguna',
   tipo: 'educativo',
-  radio: 500,
+  nivel: 'EE1|400',
   fuente: 'gadm',
   cruce: false,
   a: 'comercio',
@@ -159,26 +155,56 @@ export default function PanelAnalisis({
 
             <div>
               <p className="text-[11px]" style={{ color: 'var(--gr-tinta-3)' }}>
-                Radio de servicio
+                Radio de influencia según la ordenanza
               </p>
-              <div className="mt-1 grid grid-cols-3 gap-1">
-                {RADIOS.map((r) => (
-                  <button
-                    key={r}
-                    type="button"
-                    onClick={() => cambiar({ radio: r })}
-                    aria-pressed={analisis.radio === r}
-                    className="gr-num rounded border px-1 py-1 text-[12px]"
-                    style={{
-                      borderColor: analisis.radio === r ? 'var(--gr-info)' : 'var(--gr-linea-fuerte)',
-                      background: analisis.radio === r ? 'var(--gr-info)' : 'var(--gr-superficie)',
-                      color: analisis.radio === r ? '#ffffff' : 'var(--gr-tinta-2)',
-                    }}
-                  >
-                    {r} m
-                  </button>
-                ))}
+              <div className="mt-1 space-y-1">
+                {nivelesMedibles(analisis.tipo).map((n) => {
+                  const clave = claveNivel(n)
+                  const activo = analisis.nivel === clave
+                  return (
+                    <button
+                      key={clave}
+                      type="button"
+                      onClick={() => cambiar({ nivel: clave })}
+                      aria-pressed={activo}
+                      className="flex w-full items-baseline gap-2 rounded border px-2 py-1 text-left text-[12px]"
+                      style={{
+                        borderColor: activo ? 'var(--gr-info)' : 'var(--gr-linea-fuerte)',
+                        background: activo ? 'var(--gr-info)' : 'var(--gr-superficie)',
+                        color: activo ? '#ffffff' : 'var(--gr-tinta-2)',
+                      }}
+                    >
+                      <span className="font-semibold">{n.tipologia}</span>
+                      <span className="gr-num">{numero(n.radio!)} m</span>
+                      <span className="gr-num text-[10px] opacity-80">{n.simbolo}</span>
+                    </button>
+                  )
+                })}
               </div>
+              {/* Lo que cubre cada nivel, porque «Barrial» a secas no dice si
+                  entra el colegio o solo la escuela. */}
+              {(() => {
+                const n = nivelesMedibles(analisis.tipo).find(
+                  (x) => claveNivel(x) === analisis.nivel,
+                )
+                if (!n) return null
+                return (
+                  <p className="mt-1 text-[11px]" style={{ color: 'var(--gr-tinta-3)' }}>
+                    {n.actividades}
+                    {n.m2hab !== null && ` · norma ${n.m2hab} m²/hab`}
+                    {n.pobBase !== null && ` · población base ${numero(n.pobBase)} hab`}
+                  </p>
+                )
+              })()}
+              {/* Los niveles cantonales no se ofrecen: la tabla les pone «---»
+                  en el radio porque sirven a toda la ciudad. Decirlo evita que
+                  parezca que falta una opcion. */}
+              {(NORMA[analisis.tipo] ?? []).some((n) => n.radio === null) && (
+                <p className="mt-1 text-[11px]" style={{ color: 'var(--gr-tinta-3)' }}>
+                  El nivel cantonal no aparece porque la ordenanza no le fija radio: sirve a toda
+                  la ciudad.
+                </p>
+              )}
             </div>
 
             <label className="block text-[11px]" style={{ color: 'var(--gr-tinta-3)' }}>
@@ -300,11 +326,11 @@ export default function PanelAnalisis({
                     tres limitaciones van pegadas al numero, no en una ayuda
                     aparte que nadie abre. */}
                 <p className="gr-nota">
-                  Medido en línea recta, con todos los equipamientos pesando igual —sin su
-                  capacidad— y repartiendo la población uniformemente dentro de cada barrio. El
-                  radio es un valor de partida: fíjelo contra el estándar urbanístico del PUGS
-                  antes de llevar la cifra a un informe.
-                  {cobertura.poblacion > 0 && ' Población: INEC, Censo 2022.'}
+                  Radio de influencia del {CITA_NORMA}. La propia tabla dice que es
+                  «evaluatorio en las áreas urbanas consolidadas», que es justo este uso.
+                  {cobertura.poblacion > 0 && ' Población: INEC, Censo 2022.'} Medido en línea
+                  recta, con todos los equipamientos pesando igual —sin su capacidad— y
+                  repartiendo la población uniformemente dentro de cada barrio.
                 </p>
               </>
             )}

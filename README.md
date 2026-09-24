@@ -269,6 +269,57 @@ python scripts/convertir_shapefiles.py
 python scripts/indexar_calles.py
 ```
 
+## Los radios de cobertura salen de la ordenanza
+
+No son una estimación ni un orden de magnitud: están tomados del **Código
+Urbano de Riobamba, artículo 178, tabla 3** (Registro Oficial Edición Especial
+N.º 885, 23 de mayo de 2023, págs. 151–160). La propia tabla dice para qué
+sirve el radio de influencia: es «el referente urbano de implantación de los
+equipamientos en urbanización nueva y **evaluatorio en las áreas urbanas
+consolidadas**». Lo segundo es exactamente lo que hace el visor.
+
+| Tipo del inventario | Barrial | Zonal | Cantonal |
+|---|---|---|---|
+| Educativo | 400 m (EE1) | 2.000 m (EE2) | sin radio (EE3) |
+| Salud | 800 m (ES1) | 2.000 m (ES2) | sin radio (ES3) |
+| Recreativo | 400 m (ED1) | 3.000 m (ED2) | sin radio (ED3) |
+| Religioso / cultura | 400 m (EC1) | 2.000 m (ER2/EC2) | sin radio |
+| Administrativo | 400 m (EG1, UPC) · 2.000 m (EG1, bomberos) | — | sin radio (EA1) |
+
+Los niveles **cantonales no se ofrecen**, y no por falta de dato: la tabla les
+pone «---» porque sirven a toda la ciudad y no tienen área de influencia local.
+Medirlos con un radio inventado daría una cifra sin respaldo. El visor lo dice
+en pantalla en vez de dejar el hueco.
+
+### El nivel no es solo un número, también elige qué se cuenta
+
+El radio barrial de 400 m es el de la escuela, no el de la universidad. Como el
+inventario municipal **sí trae subtipo en lo educativo** —63 `school`, 20
+`college`, 10 `kindergarten`, 6 `university`—, cada nivel cuenta solo los suyos:
+
+- **EE1 Barrial**: `school` y `kindergarten`
+- **EE2 Zonal**: `college`
+- **EE3 Cantonal**: `university`
+
+Lo mismo se aplica a los registros de OSM cuando se cuentan como servicio, por
+su etiqueta `amenity`. En los demás tipos el inventario no trae subtipo, así que
+todos los equipamientos se miden con el nivel que se elija; conviene tenerlo
+presente al leer la cifra.
+
+### Lo que sale al aplicarlo
+
+Riobamba urbano, equipamiento **educativo barrial (EE1, 400 m)**, contando solo
+el inventario del GADM:
+
+- **63,8 % de la población cubierta** — 110.288 de 172.884 habitantes
+- **62.596 personas fuera** del radio que fija la ordenanza
+- 50,0 % de la superficie, con 69 equipamientos
+- 29.305 personas viven en barrios sin ninguna cobertura
+
+Sumando lo registrado en OpenStreetMap sube a 68,9 % (162 equipamientos: 69 del
+inventario y 93 de OSM). La diferencia entre las dos cifras es la medida de lo
+que le falta al inventario, no de lo que le falta a la ciudad.
+
 ## La población viene del Censo 2022, agregada
 
 El análisis de cobertura mide habitantes, no solo hectáreas. La población sale

@@ -24,7 +24,8 @@ import {
 } from './hooks/usePuntos'
 import { descargarCsv, descargarGeoJSON, descargarShapefile } from './lib/exportar'
 import { barriosDe, calcularDeficit, cruzar, hallazgosACsv, sinInventariar } from './lib/analisis'
-import { calcularCobertura, RADIO_SUGERIDO, tiposDisponibles } from './lib/cobertura'
+import { calcularCobertura, tiposDisponibles } from './lib/cobertura'
+import { claveNivel, nivelDe, nivelInicial } from './lib/norma'
 import { avancePorPlataforma, URBANO } from './lib/municipal'
 import { VISTA_INICIAL } from './config/riobamba'
 import { MAPA_BASE_INICIAL } from './config/mapasBase'
@@ -173,26 +174,26 @@ export default function App() {
    */
   const tipos = useMemo(() => tiposDisponibles(equipamientos), [equipamientos])
 
-  const cobertura = useMemo(
-    () =>
-      analisis.capaBarrios === 'cobertura' && capasMun
-        ? calcularCobertura(barriosAmbito, equipAmbito, ambitoPlataforma, {
-            tipo: analisis.tipo,
-            radio: analisis.radio,
-            fuente: analisis.fuente,
-          })
-        : null,
-    [
+  const cobertura = useMemo(() => {
+    if (analisis.capaBarrios !== 'cobertura' || !capasMun) return null
+    const nivel = nivelDe(analisis.tipo, analisis.nivel) ?? nivelInicial(analisis.tipo)
+    // Sin nivel con radio no hay nada que medir: la ordenanza no se lo fija.
+    if (!nivel || nivel.radio === null) return null
+    return calcularCobertura(barriosAmbito, equipAmbito, ambitoPlataforma, {
+      tipo: analisis.tipo,
+      nivel: nivel as typeof nivel & { radio: number },
+      fuente: analisis.fuente,
+    })
+  }, [
       analisis.capaBarrios,
       analisis.tipo,
-      analisis.radio,
+      analisis.nivel,
       analisis.fuente,
       capasMun,
       barriosAmbito,
       equipAmbito,
       ambitoPlataforma,
-    ],
-  )
+  ])
 
   const cruce = useMemo(
     () => (analisis.cruce ? cruzar(ambito, analisis.a, analisis.b, analisis.umbral) : null),
@@ -284,12 +285,14 @@ export default function App() {
   const elegirBarrio = (nombre: string) => cambiarFiltros({ ...filtros, barrio: nombre })
 
   /*
-   * Cambiar de tipo trae consigo su radio de partida: una escuela y una
-   * unidad administrativa no sirven al mismo radio, y dejar el del tipo
-   * anterior daria una cobertura que nadie ha pedido.
+   * Cambiar de tipo trae consigo el nivel de partida de ese tipo: los niveles
+   * son filas distintas de la tabla de la ordenanza y el del tipo anterior no
+   * existe aqui. Se elige el primero medible, que es el de proximidad.
    */
   const cambiarAnalisis = (a: EstadoAnalisis) => {
-    setAnalisis(a.tipo !== analisis.tipo ? { ...a, radio: RADIO_SUGERIDO[a.tipo] ?? a.radio } : a)
+    if (a.tipo === analisis.tipo) return setAnalisis(a)
+    const inicial = nivelInicial(a.tipo)
+    setAnalisis({ ...a, nivel: inicial ? claveNivel(inicial) : a.nivel })
   }
 
   const elegirPunto = (id: string | null) => {

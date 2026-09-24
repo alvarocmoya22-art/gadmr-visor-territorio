@@ -21,37 +21,19 @@
  *    la capacidad de cada uno y un método tipo E2SFCA.
  *  - Dentro del barrio reparte la población de forma uniforme. Es un supuesto
  *    aceptable en barrios urbanos pequeños, no en los de borde.
- *  - Los radios son un punto de partida, no una norma. Hay que fijarlos contra
- *    el estándar urbanístico que aplique al PUGS.
+ *  - Los radios salen del Código Urbano de Riobamba (ver `norma.ts`), pero la
+ *    tabla los define por tipología y el inventario solo distingue subtipo en
+ *    lo educativo. En los demás tipos, todos los equipamientos se miden con el
+ *    nivel que se elija.
  */
 import type { ClaveCategoria } from './categorias'
 import { distanciaM, enPoligono } from './geo'
+import type { NivelNorma } from './norma'
 import type { Barrio, EquipamientoMunicipal } from './municipal'
 import type { Punto } from './overpass'
 
 /** De dónde salen los equipamientos que cuentan como servicio. */
 export type FuenteCobertura = 'gadm' | 'osm' | 'ambas'
-
-/**
- * Radios de partida por tipo, en metros.
- *
- * Son órdenes de magnitud corrientes en la jerarquía barrial/sectorial/zonal,
- * NO cifras tomadas de una norma concreta. Están aquí para que el visor abra
- * con algo razonable; el valor que se use en un informe tiene que salir del
- * estándar urbanístico vigente y por eso el radio es un control a la vista.
- */
-export const RADIO_SUGERIDO: Record<string, number> = {
-  educativo: 500,
-  recreativo: 400,
-  salud: 1000,
-  'religioso / cultura': 800,
-  cultura: 800,
-  administrativo: 1500,
-}
-export const RADIO_POR_DEFECTO = 800
-
-/** Radios que ofrece el control, en metros. */
-export const RADIOS = [300, 400, 500, 800, 1000, 1500]
 
 /**
  * Categoría de OSM equivalente a cada tipo del inventario municipal.
@@ -92,6 +74,8 @@ export interface CoberturaBarrio {
 
 export interface Cobertura {
   tipo: string
+  /** Nivel de la norma con el que se midió. */
+  nivel: NivelNorma
   radio: number
   fuente: FuenteCobertura
   /** Equipamientos que han entrado en el cálculo. */
@@ -175,7 +159,8 @@ function circulo(lon: number, lat: number, radioM: number, lados = 36): number[]
 
 export interface OpcionesCobertura {
   tipo: string
-  radio: number
+  /** Nivel de la norma que se está midiendo; de él sale el radio. */
+  nivel: NivelNorma & { radio: number }
   fuente: FuenteCobertura
 }
 
@@ -189,12 +174,31 @@ export function calcularCobertura(
   barrios: Barrio[],
   equipamientos: EquipamientoMunicipal[],
   puntos: Punto[],
-  { tipo, radio, fuente }: OpcionesCobertura,
+  { tipo, nivel, fuente }: OpcionesCobertura,
 ): Cobertura {
-  const delGadm = fuente === 'osm' ? [] : equipamientos.filter((e) => e.tipo === tipo)
+  const radio = nivel.radio
+
+  /*
+   * Cuando el nivel distingue subtipos, solo cuentan los suyos: el radio
+   * barrial de 400 m es el de la escuela, no el de la universidad, y meterlas
+   * en el mismo saco infla la cobertura con equipamientos que la norma mide
+   * de otra manera. Donde el inventario no trae subtipo, cuentan todos.
+   */
+  const delGadm =
+    fuente === 'osm'
+      ? []
+      : equipamientos.filter(
+          (e) =>
+            e.tipo === tipo && (!nivel.subtipos || (e.subtipo !== null && nivel.subtipos.includes(e.subtipo))),
+        )
+
   const categoria = EQUIVALENTE_OSM[tipo]
   const delOsm =
-    fuente === 'gadm' || !categoria ? [] : puntos.filter((p) => p.categoria === categoria)
+    fuente === 'gadm' || !categoria
+      ? []
+      : puntos.filter(
+          (p) => p.categoria === categoria && (!nivel.clasesOsm || nivel.clasesOsm.includes(p.clase)),
+        )
 
   const servicios: Servicio[] = [
     ...delGadm.map((e) => ({ lon: e.lon, lat: e.lat })),
@@ -285,6 +289,7 @@ export function calcularCobertura(
 
   return {
     tipo,
+    nivel,
     radio,
     fuente,
     servicios: servicios.length,
