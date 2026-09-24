@@ -15,7 +15,14 @@ import { urlTeselas as urlTeselasMapillary } from '../lib/mapillary'
 import { distanciaM } from '../lib/geo'
 import type { Calle } from '../lib/calles'
 import type { Barrio } from '../lib/municipal'
-import { PITCH_3D, type ClaveEscenario, type ColorPor, type PesoDensidad } from '../config/deckEscenarios'
+import {
+  PITCH_3D,
+  type AlturaBarrio,
+  type ClaveEscenario,
+  type ColorBarrio,
+  type ColorPor,
+  type PesoDensidad,
+} from '../config/deckEscenarios'
 
 /** Lo que el escenario avanzado necesita para dibujarse. */
 export interface Espacial {
@@ -25,6 +32,8 @@ export interface Espacial {
   peso: PesoDensidad
   extruido: boolean
   tipoEquipamiento: string
+  altura: AlturaBarrio
+  colorBarrio: ColorBarrio
   barrios: Barrio[]
 }
 
@@ -111,6 +120,15 @@ function textoTooltip(objeto: unknown): { html: string } | null {
       html:
         `<b>${escapar(o.barrio)}</b><br>${num(o.poblacion)} hab<br>` +
         `a ${num(o.distancia as number)} m de ${escapar(String(o.equipamiento))}`,
+    }
+  }
+  // Pieza de barrio
+  if (typeof o.nombre === 'string' && typeof o.poblacion === 'number' && 'servicios' in o) {
+    const d = o.distancia as number | null
+    return {
+      html:
+        `<b>${escapar(o.nombre)}</b><br>${num(o.poblacion)} hab · ${num(o.viviendas as number)} viviendas<br>` +
+        (d === null ? 'sin equipamiento del tipo' : `a ${num(d)} m del más cercano`),
     }
   }
   // Celda del hexagono
@@ -940,6 +958,19 @@ export default function Mapa({
                   espacial.extruido,
                 ),
               ]
+            : espacial.escenario === 'barrios'
+              ? [
+                  capas.capaBarrios(
+                    capas.piezasDeBarrios(
+                      espacial.barrios,
+                      equipamientos,
+                      espacial.tipoEquipamiento,
+                    ),
+                    espacial.altura,
+                    espacial.colorBarrio,
+                    espacial.extruido,
+                  ),
+                ]
             : espacial.escenario === 'flujos'
               ? [
                   capas.capaFlujos(
@@ -960,8 +991,19 @@ export default function Mapa({
         overlay.current.setProps({ layers: lista })
       }
 
-      const quiere3D = espacial.escenario === 'densidad' && espacial.extruido
-      if (quiere3D && m.getPitch() < 10) m.easeTo({ pitch: PITCH_3D, duration: 600 })
+      const quiere3D =
+        (espacial.escenario === 'densidad' || espacial.escenario === 'barrios') &&
+        espacial.extruido
+      if (quiere3D && m.getPitch() < 10) {
+        /*
+         * Alejar si se estaba muy cerca. Los bloques miden cientos de metros
+         * de alto: al inclinar la camara desde un zoom de calle, se queda
+         * dentro de uno y la pantalla entera se vuelve gris sin que se
+         * entienda por que.
+         */
+        const zoom = m.getZoom()
+        m.easeTo({ pitch: PITCH_3D, zoom: zoom > 15 ? 13.5 : zoom, duration: 600 })
+      }
       if (!quiere3D && m.getPitch() > 10) m.easeTo({ pitch: 0, duration: 400 })
     })()
 

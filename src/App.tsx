@@ -29,6 +29,7 @@ import {
 } from './hooks/usePuntos'
 import { descargarCsv, descargarGeoJSON, descargarShapefile } from './lib/exportar'
 import { barriosDe, calcularDeficit, cruzar, hallazgosACsv, sinInventariar } from './lib/analisis'
+import { distanciaM } from './lib/geo'
 import { calcularCobertura, serviciosDe, tiposDisponibles } from './lib/cobertura'
 import { claveNivel, nivelDe, nivelInicial } from './lib/norma'
 import { avancePorPlataforma, URBANO } from './lib/municipal'
@@ -299,6 +300,27 @@ export default function App() {
     return () => {
       vivo = false
     }
+  }, [verEspacial, espacial.escenario, espacial.tipoEquipamiento, barriosAmbito, equipAmbito])
+
+  /**
+   * Los barrios ordenados por gente mal servida: poblacion por lo lejos que le
+   * queda el equipamiento. Es la tabla que acompana a la vista en tres
+   * dimensiones, donde «alto y oscuro» es lo que hay que mirar.
+   */
+  const prioridades = useMemo(() => {
+    if (!verEspacial || espacial.escenario !== 'barrios') return []
+    const destino = equipAmbito.filter((e) => e.tipo === espacial.tipoEquipamiento)
+    return barriosAmbito
+      .filter((b) => b.pob > 0)
+      .map((b) => {
+        let distancia: number | null = null
+        for (const e of destino) {
+          const d = distanciaM(b.centro[0], b.centro[1], e.lon, e.lat)
+          if (distancia === null || d < distancia) distancia = d
+        }
+        return { nombre: b.nombre, pob: b.pob, distancia }
+      })
+      .sort((a, b) => b.pob * (b.distancia ?? 5000) - a.pob * (a.distancia ?? 5000))
   }, [verEspacial, espacial.escenario, espacial.tipoEquipamiento, barriosAmbito, equipAmbito])
 
   const porCategoriaEspacial = useMemo(
@@ -598,6 +620,8 @@ export default function App() {
                     peso: espacial.peso,
                     extruido: espacial.extruido,
                     tipoEquipamiento: espacial.tipoEquipamiento,
+                    altura: espacial.altura,
+                    colorBarrio: espacial.colorBarrio,
                     barrios: barriosAmbito,
                   }
                 : null
@@ -702,6 +726,8 @@ export default function App() {
                 porCategoria={porCategoriaEspacial}
                 pendientes={resumen.pendientes}
                 totalEquipamientos={equipFiltrados.length}
+                barrios={barriosAmbito}
+                prioridades={prioridades}
                 flujos={flujos?.resumen ?? null}
                 arcos={flujos?.arcos ?? 0}
                 ambito={ambitoRotulo}

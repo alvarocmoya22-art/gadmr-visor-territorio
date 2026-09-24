@@ -8,19 +8,23 @@
  * El módulo se carga con `import()` desde el mapa: deck.gl pesa lo suyo y no
  * tiene por qué descargarlo quien no abra la pestaña.
  */
-import { ArcLayer, ScatterplotLayer } from '@deck.gl/layers'
+import { ArcLayer, PolygonLayer, ScatterplotLayer } from '@deck.gl/layers'
 import { HexagonLayer } from '@deck.gl/aggregation-layers'
 import type { Layer } from '@deck.gl/core'
 import {
   ARCO_ALERTA_M,
+  ELEVACION_BARRIOS,
   ELEVACION_MAXIMA,
   MAX_ARCOS,
+  type AlturaBarrio,
+  type ColorBarrio,
   type ColorPor,
   type PesoDensidad,
 } from '../../config/deckEscenarios'
 import { distanciaM } from '../geo'
 import type { Barrio, EquipamientoMunicipal } from '../municipal'
 import type { Punto } from '../overpass'
+import type { Anillo } from '../geo'
 import {
   ARCO_DESTINO,
   ARCO_LEJOS,
@@ -189,6 +193,109 @@ export function capaFlujos(arcos: Arco[]): Layer {
     getHeight: 0.4,
     pickable: true,
     updateTriggers: { getWidth: [maxPob], getSourceColor: [arcos.length] },
+  })
+}
+
+/** Una pieza de barrio lista para dibujar, con lo que la tiñe y la levanta. */
+export interface PiezaBarrio {
+  nombre: string
+  anillos: Anillo[]
+  poblacion: number
+  viviendas: number
+  areaHa: number
+  /** Metros al equipamiento más cercano del tipo elegido; null si no hay ninguno. */
+  distancia: number | null
+  /** Parte de la población con servicios básicos, de 0 a 1. */
+  servicios: number
+}
+
+/**
+ * Prepara los barrios para dibujarlos en tres dimensiones.
+ *
+ * Un barrio puede venir partido en varias piezas, y `PolygonLayer` dibuja un
+ * polígono por dato, así que cada pieza va suelta repitiendo los atributos del
+ * barrio. La altura y el color son del barrio entero, no de la pieza: partir
+ * la población entre los trozos daría bloques de distinta altura para el mismo
+ * sitio.
+ */
+export function piezasDeBarrios(
+  barrios: Barrio[],
+  equipamientos: EquipamientoMunicipal[],
+  tipo: string,
+): PiezaBarrio[] {
+  const destino = equipamientos.filter((e) => e.tipo === tipo)
+  const piezas: PiezaBarrio[] = []
+  for (const b of barrios) {
+    let distancia: number | null = null
+    for (const e of destino) {
+      const d = distanciaM(b.centro[0], b.centro[1], e.lon, e.lat)
+      if (distancia === null || d < distancia) distancia = d
+    }
+    for (const poly of b.poligonos) {
+      piezas.push({
+        nombre: b.nombre,
+        anillos: poly,
+        poblacion: b.pob,
+        viviendas: b.viv,
+        areaHa: b.areaHa,
+        distancia,
+        servicios: b.pob > 0 ? b.pobServB / b.pob : 0,
+      })
+    }
+  }
+  return piezas
+}
+
+/** El valor que levanta cada barrio, según lo elegido. */
+function alturaDe(p: PiezaBarrio, altura: AlturaBarrio): number {
+  if (altura === 'viviendas') return p.viviendas
+  if (altura === 'densidad') return p.areaHa > 0 ? p.poblacion / p.areaHa : 0
+  return p.poblacion
+}
+
+/**
+ * Barrios extruidos: la altura dice cuánta gente y el color, cómo de lejos
+ * le queda el servicio. Alto y oscuro es una prioridad; bajo y oscuro, no.
+ */
+export function capaBarrios(
+  piezas: PiezaBarrio[],
+  altura: AlturaBarrio,
+  color: ColorBarrio,
+  extruido: boolean,
+): Layer {
+  const maximo = Math.max(1, ...piezas.map((p) => alturaDe(p, altura)))
+  // La escala del color del deficit, la misma de la pestana Analisis: las dos
+  // responden a la misma pregunta y deben leerse igual.
+  const tono = (p: PiezaBarrio): Rgba => {
+    if (color === 'servicios') {
+      // Sin servicios basicos -> extremo oscuro, igual que «lejos».
+      const i = Math.min(5, Math.floor((1 - p.servicios) * 6))
+      return RAMPA_DENSIDAD[i]
+    }
+    const d = p.distancia
+    if (d === null) return RAMPA_DENSIDAD[5]
+    const i = d < 250 ? 0 : d < 500 ? 1 : d < 750 ? 2 : d < 1000 ? 3 : 4
+    return RAMPA_DENSIDAD[i + 1]
+  }
+
+  return new PolygonLayer<PiezaBarrio>({
+    id: 'deck-barrios',
+    data: piezas,
+    getPolygon: (p) => p.anillos as unknown as number[][][],
+    extruded: extruido,
+    getElevation: (p) => (alturaDe(p, altura) / maximo) * ELEVACION_BARRIOS,
+    getFillColor: tono,
+    getLineColor: [255, 255, 255, 120],
+    lineWidthMinPixels: 1,
+    stroked: true,
+    filled: true,
+    wireframe: false,
+    opacity: 0.85,
+    pickable: true,
+    updateTriggers: {
+      getElevation: [altura, maximo, extruido],
+      getFillColor: [color],
+    },
   })
 }
 

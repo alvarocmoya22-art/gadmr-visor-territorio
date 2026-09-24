@@ -6,7 +6,9 @@ import {
   RADIO_HEXAGONO_INICIAL,
   ARCO_ALERTA_M,
   MAX_ARCOS,
+  type AlturaBarrio,
   type ClaveEscenario,
+  type ColorBarrio,
   type ColorPor,
   type PesoDensidad,
 } from '../config/deckEscenarios'
@@ -20,6 +22,8 @@ export interface EstadoEspacial {
   peso: PesoDensidad
   extruido: boolean
   tipoEquipamiento: string
+  altura: AlturaBarrio
+  colorBarrio: ColorBarrio
 }
 
 export const ESPACIAL_INICIAL: EstadoEspacial = {
@@ -29,6 +33,8 @@ export const ESPACIAL_INICIAL: EstadoEspacial = {
   peso: 'registros',
   extruido: true,
   tipoEquipamiento: 'educativo',
+  altura: 'poblacion',
+  colorBarrio: 'distancia',
 }
 
 /** Resumen que calcula `lib/deck/escenarios` y esta vista solo muestra. */
@@ -52,6 +58,10 @@ interface Props {
   pendientes: number
   /** Equipamientos del inventario en vista, para la cifra de la agregación. */
   totalEquipamientos: number
+  /** Barrios del ámbito, para la vista en tres dimensiones. */
+  barrios: { nombre: string; pob: number }[]
+  /** Los barrios con más gente peor servida, ya ordenados. */
+  prioridades: { nombre: string; pob: number; distancia: number | null }[]
   /** Resumen de la asignación; null mientras no toque. */
   flujos: ResumenFlujos | null
   arcos: number
@@ -99,6 +109,8 @@ export default function PanelEspacial({
   porCategoria,
   pendientes,
   totalEquipamientos,
+  barrios,
+  prioridades,
   flujos,
   arcos,
   ambito,
@@ -293,6 +305,136 @@ export default function PanelEspacial({
               escala se recalcula.
             </p>
           </div>
+        </>
+      )}
+
+      {/* ───────────────────────────────────────── barrios en 3D */}
+      {estado.escenario === 'barrios' && (
+        <>
+          <label className="block text-[11px]" style={{ color: 'var(--gr-tinta-3)' }}>
+            Altura del barrio
+            <select
+              value={estado.altura}
+              onChange={(e) => cambiar({ altura: e.target.value as AlturaBarrio })}
+              className="mt-0.5 w-full rounded border px-2 py-1.5 text-[13px]"
+              style={{ ...campo, ...TACTIL }}
+            >
+              <option value="poblacion">Habitantes</option>
+              <option value="viviendas">Viviendas ocupadas</option>
+              <option value="densidad">Densidad, habitantes por hectárea</option>
+            </select>
+          </label>
+
+          <label className="block text-[11px]" style={{ color: 'var(--gr-tinta-3)' }}>
+            Color del barrio
+            <select
+              value={estado.colorBarrio}
+              onChange={(e) => cambiar({ colorBarrio: e.target.value as ColorBarrio })}
+              className="mt-0.5 w-full rounded border px-2 py-1.5 text-[13px]"
+              style={{ ...campo, ...TACTIL }}
+            >
+              <option value="distancia">Distancia al equipamiento más cercano</option>
+              <option value="servicios">Población sin servicios básicos</option>
+            </select>
+          </label>
+
+          {estado.colorBarrio === 'distancia' && (
+            <label className="block text-[11px]" style={{ color: 'var(--gr-tinta-3)' }}>
+              Equipamiento de referencia
+              <select
+                value={estado.tipoEquipamiento}
+                onChange={(e) => cambiar({ tipoEquipamiento: e.target.value })}
+                className="mt-0.5 w-full rounded border px-2 py-1.5 text-[13px]"
+                style={{ ...campo, ...TACTIL }}
+              >
+                {tipos.map((t) => (
+                  <option key={t.tipo} value={t.tipo}>
+                    {t.tipo} · {numero(t.n)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+
+          <label
+            className="flex items-center gap-2 text-[13px]"
+            style={{ color: 'var(--gr-tinta-2)', ...TACTIL }}
+          >
+            <input
+              type="checkbox"
+              checked={estado.extruido}
+              onChange={(e) => cambiar({ extruido: e.target.checked })}
+            />
+            Levantar en 3D
+          </label>
+
+          <Cifras
+            items={[
+              { t: 'barrios', v: numero(barrios.length) },
+              { t: 'habitantes', v: numero(barrios.reduce((s, b) => s + b.pob, 0)) },
+              {
+                t: 'el más poblado',
+                v: numero(Math.max(0, ...barrios.map((b) => b.pob))),
+              },
+            ]}
+          />
+
+          <div>
+            <p className="gr-eyebrow mb-1">
+              {estado.colorBarrio === 'distancia'
+                ? 'Distancia al equipamiento'
+                : 'Población sin servicios básicos'}
+            </p>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px]" style={{ color: 'var(--gr-tinta-3)' }}>
+                {estado.colorBarrio === 'distancia' ? 'cerca' : 'pocos'}
+              </span>
+              <span
+                aria-hidden
+                className="h-2 flex-1 rounded-sm"
+                style={{
+                  background: `linear-gradient(to right, ${RAMPA_DENSIDAD.map(
+                    (c) => `rgb(${c[0]},${c[1]},${c[2]})`,
+                  ).join(',')})`,
+                }}
+              />
+              <span className="text-[10px]" style={{ color: 'var(--gr-tinta-3)' }}>
+                {estado.colorBarrio === 'distancia' ? 'lejos' : 'muchos'}
+              </span>
+            </div>
+          </div>
+
+          <table className="gr-tabla">
+            <caption className="gr-eyebrow mb-1 text-left">
+              Más gente y peor servida
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Barrio</th>
+                <th scope="col" className="text-right">Habitantes</th>
+                <th scope="col" className="text-right">Distancia</th>
+              </tr>
+            </thead>
+            <tbody>
+              {prioridades.slice(0, 12).map((b) => (
+                <tr key={b.nombre}>
+                  <th scope="row" className="font-normal">{b.nombre}</th>
+                  <td className="gr-num text-right">{numero(b.pob)}</td>
+                  <td className="gr-num text-right">
+                    {b.distancia === null ? '—' : `${numero(b.distancia)} m`}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          {/* Un bloque alto y oscuro parece una alarma, y a veces no lo es:
+              el color y la altura responden a preguntas distintas. */}
+          <p className="gr-nota">
+            La altura es cuánta gente vive y el color, lo lejos que le queda el servicio. Un
+            barrio alto y oscuro es una prioridad; uno bajo y oscuro, no tanto, porque casi no
+            hay a quien atender. La distancia es en línea recta desde el centro del barrio.
+          </p>
         </>
       )}
 

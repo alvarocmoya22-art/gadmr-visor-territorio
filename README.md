@@ -280,6 +280,7 @@ controles sin duplicar nada.
 |---|---|---|
 | Puntos por categoría | `ScatterplotLayer` | Registros de OSM filtrados, color por categoría o por estado |
 | Densidad en hexágonos | `HexagonLayer` | Los mismos registros, agregados; radio de 75 a 500 m, 3D opcional |
+| Barrios en 3D | `PolygonLayer` | Altura por población o viviendas, color por distancia al equipamiento o por carencia de servicios básicos |
 | Asignación barrio → equipamiento | `ArcLayer` | Centro del barrio al equipamiento más cercano; grosor = población |
 | Recorridos de campo | `TripsLayer` | **Bloqueado**, ver abajo |
 
@@ -298,6 +299,21 @@ aparece deshabilitado y explica el motivo en pantalla.
 La vía real son las **secuencias de Mapillary**, que sí llevan `captured_at`
 por imagen. Queda pendiente de decidir porque la API limita cada consulta a
 0,01 grados² y habría que trocear cada plataforma en varias peticiones.
+
+### Altura y color responden preguntas distintas
+
+En «Barrios en 3D» la altura es **cuánta gente vive** y el color, **lo lejos que
+le queda el servicio**. Un barrio alto y oscuro es una prioridad; uno bajo y
+oscuro, no tanto, porque casi no hay a quien atender. Es la diferencia que el
+déficit por distancia, a secas, no sabía expresar.
+
+La tabla que acompaña ordena por población × distancia, así que arriba quedan
+los que suman las dos cosas: Subestación Eléctrica con 2.723 habitantes a 977 m
+de la escuela más cercana, o Av. Maldonado con 2.949 a 645 m.
+
+Un detalle de cámara: los bloques miden cientos de metros de alto, así que
+inclinar desde un zoom de calle deja la vista **dentro** de uno y la pantalla se
+vuelve gris. Al activar un escenario 3D desde muy cerca, el mapa se aleja solo.
 
 ### Los arcos no son viajes
 

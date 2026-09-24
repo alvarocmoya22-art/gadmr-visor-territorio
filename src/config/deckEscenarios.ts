@@ -15,7 +15,7 @@
  */
 import type { ClaveCategoria } from '../lib/categorias'
 
-export type ClaveEscenario = 'puntos' | 'densidad' | 'flujos' | 'recorridos'
+export type ClaveEscenario = 'puntos' | 'densidad' | 'barrios' | 'flujos' | 'recorridos'
 
 export interface Escenario {
   clave: ClaveEscenario
@@ -53,6 +53,14 @@ export const ESCENARIOS: Escenario[] = [
     rotulo: 'Densidad en hexágonos (3D)',
     resumen: 'Agrega los registros en celdas y las levanta según lo que haya dentro.',
     origen: 'Los mismos registros, agregados en hexágonos del radio que se elija.',
+    bloqueado: null,
+  },
+  {
+    clave: 'barrios',
+    rotulo: 'Barrios en 3D',
+    resumen: 'Cada barrio levantado por su población y teñido por lo lejos que le queda el servicio.',
+    origen:
+      'Población del Censo 2022 y distancia al equipamiento más cercano del tipo elegido.',
     bloqueado: null,
   },
   {
@@ -155,6 +163,21 @@ export const PITCH_3D = 50
  * entre esta vista y el resto del visor.
  */
 export type ColorPor = 'categoria' | 'frescura'
+
+/** Qué levanta cada barrio. */
+export type AlturaBarrio = 'poblacion' | 'viviendas' | 'densidad'
+
+/** Qué tiñe cada barrio. */
+export type ColorBarrio = 'distancia' | 'servicios'
+
+/**
+ * Altura del barrio más alto, en metros de mundo.
+ *
+ * Más baja que la de los hexágonos porque los barrios son polígonos anchos: a
+ * igualdad de altura, un bloque de veinte hectáreas tapa mucho más que una
+ * celda de 150 m.
+ */
+export const ELEVACION_BARRIOS = 320
 
 /** VALIDAR: umbral en metros por encima del cual el arco se marca en alerta. */
 export const ARCO_ALERTA_M = 1000
