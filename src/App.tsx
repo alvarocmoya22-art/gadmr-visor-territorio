@@ -701,6 +701,7 @@ export default function App() {
                 totalPuntos={filtrados.length}
                 porCategoria={porCategoriaEspacial}
                 pendientes={resumen.pendientes}
+                totalEquipamientos={equipFiltrados.length}
                 flujos={flujos?.resumen ?? null}
                 arcos={flujos?.arcos ?? 0}
                 ambito={ambitoRotulo}

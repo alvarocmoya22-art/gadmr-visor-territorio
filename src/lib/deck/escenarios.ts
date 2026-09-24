@@ -120,18 +120,36 @@ export function capaPuntos(puntos: Punto[], colorPor: ColorPor): Layer {
   })
 }
 
+/** Un punto cualquiera de los que se pueden agregar en una celda. */
+interface Agregable {
+  lon: number
+  lat: number
+}
+
+/** Lo que entra en la agregación según el peso elegido. */
+export function datosDensidad(
+  puntos: Punto[],
+  equipamientos: EquipamientoMunicipal[],
+  peso: PesoDensidad,
+): Agregable[] {
+  const pendientes = () =>
+    puntos.filter((p) => p.frescura === 'sin_verificar' || p.frescura === 'vencido')
+  if (peso === 'equipamientos') return equipamientos
+  if (peso === 'pendientes') return pendientes()
+  if (peso === 'ambos') return [...puntos, ...equipamientos]
+  return puntos
+}
+
 /** Agregación en hexágonos, con la altura según lo que se elija. */
 export function capaDensidad(
   puntos: Punto[],
+  equipamientos: EquipamientoMunicipal[],
   radio: number,
   peso: PesoDensidad,
   extruido: boolean,
 ): Layer {
-  const datos =
-    peso === 'pendientes'
-      ? puntos.filter((p) => p.frescura === 'sin_verificar' || p.frescura === 'vencido')
-      : puntos
-  return new HexagonLayer<Punto>({
+  const datos = datosDensidad(puntos, equipamientos, peso)
+  return new HexagonLayer<Agregable>({
     id: 'deck-densidad',
     data: datos,
     getPosition: (p) => [p.lon, p.lat],

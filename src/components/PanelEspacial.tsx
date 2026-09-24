@@ -50,6 +50,8 @@ interface Props {
   /** Reparto por categoría, para la tabla alternativa al mapa. */
   porCategoria: { clave: string; n: number }[]
   pendientes: number
+  /** Equipamientos del inventario en vista, para la cifra de la agregación. */
+  totalEquipamientos: number
   /** Resumen de la asignación; null mientras no toque. */
   flujos: ResumenFlujos | null
   arcos: number
@@ -96,6 +98,7 @@ export default function PanelEspacial({
   totalPuntos,
   porCategoria,
   pendientes,
+  totalEquipamientos,
   flujos,
   arcos,
   ambito,
@@ -227,8 +230,10 @@ export default function PanelEspacial({
               className="mt-0.5 w-full rounded border px-2 py-1.5 text-[13px]"
               style={{ ...campo, ...TACTIL }}
             >
-              <option value="registros">Todos los registros</option>
+              <option value="registros">Registros de OpenStreetMap</option>
               <option value="pendientes">Solo lo que falta verificar</option>
+              <option value="equipamientos">Equipamientos del GADM</option>
+              <option value="ambos">Registros y equipamientos juntos</option>
             </select>
           </label>
 
@@ -248,7 +253,15 @@ export default function PanelEspacial({
             items={[
               {
                 t: 'puntos agregados',
-                v: numero(estado.peso === 'pendientes' ? pendientes : totalPuntos),
+                v: numero(
+                  estado.peso === 'pendientes'
+                    ? pendientes
+                    : estado.peso === 'equipamientos'
+                      ? totalEquipamientos
+                      : estado.peso === 'ambos'
+                        ? totalPuntos + totalEquipamientos
+                        : totalPuntos,
+                ),
               },
               { t: 'radio', v: `${numero(estado.radio)} m` },
               { t: 'vista', v: estado.extruido ? '3D' : 'plana' },

@@ -127,12 +127,14 @@ export const RADIOS_HEXAGONO = [75, 150, 300, 500]
 export const RADIO_HEXAGONO_INICIAL = 150
 
 /**
- * Qué levanta los hexágonos.
+ * Qué se agrega en los hexágonos.
  *
- * `pendientes` es el que tiene uso operativo: la altura pasa a ser cuánto
- * queda por verificar en cada celda, no cuánto hay.
+ * `pendientes` es el de uso operativo —la altura pasa a ser cuánto queda por
+ * verificar en cada celda— y `equipamientos` responde otra pregunta distinta:
+ * dónde se concentra la dotación municipal. `ambos` los suma para ver si la
+ * concentración de oferta coincide con la de registros, que no siempre pasa.
  */
-export type PesoDensidad = 'registros' | 'pendientes'
+export type PesoDensidad = 'registros' | 'pendientes' | 'equipamientos' | 'ambos'
 
 /**
  * Altura del hexágono más alto, en metros de mundo.

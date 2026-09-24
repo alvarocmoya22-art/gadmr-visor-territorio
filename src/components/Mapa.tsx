@@ -931,7 +931,15 @@ export default function Mapa({
         espacial.escenario === 'puntos'
           ? [capas.capaPuntos(puntosDeck, espacial.colorPor)]
           : espacial.escenario === 'densidad'
-            ? [capas.capaDensidad(puntosDeck, espacial.radio, espacial.peso, espacial.extruido)]
+            ? [
+                capas.capaDensidad(
+                  puntosDeck,
+                  equipamientos,
+                  espacial.radio,
+                  espacial.peso,
+                  espacial.extruido,
+                ),
+              ]
             : espacial.escenario === 'flujos'
               ? [
                   capas.capaFlujos(
