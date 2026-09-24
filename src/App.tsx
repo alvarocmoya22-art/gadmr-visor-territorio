@@ -175,23 +175,23 @@ export default function App() {
       serviciosDe(
         {
           tipo: analisis.tipo,
-          nivel: analisis.capaBarrios === 'cobertura' ? nivelActivo : null,
+          nivel: analisis.activo === 'cobertura' ? nivelActivo : null,
           fuente: analisis.fuente,
         },
         equipAmbito,
         ambitoPlataforma,
       ),
-    [analisis.tipo, analisis.capaBarrios, analisis.fuente, nivelActivo, equipAmbito, ambitoPlataforma],
+    [analisis.tipo, analisis.activo, analisis.fuente, nivelActivo, equipAmbito, ambitoPlataforma],
   )
 
   // Solo se calcula con la capa encendida: no hay por que recorrer los barrios
   // mientras nadie la mire.
   const deficit = useMemo(
     () =>
-      analisis.capaBarrios === 'deficit' && capasMun
+      analisis.activo === 'distancia' && capasMun
         ? calcularDeficit(barriosAmbito, servicios.servicios, ambitoPlataforma)
         : null,
-    [analisis.capaBarrios, capasMun, barriosAmbito, servicios, ambitoPlataforma],
+    [analisis.activo, capasMun, barriosAmbito, servicios, ambitoPlataforma],
   )
 
   /**
@@ -202,7 +202,7 @@ export default function App() {
   const tipos = useMemo(() => tiposDisponibles(equipamientos), [equipamientos])
 
   const cobertura = useMemo(() => {
-    if (analisis.capaBarrios !== 'cobertura' || !capasMun) return null
+    if (analisis.activo !== 'cobertura' || !capasMun) return null
     const nivel = nivelActivo
     // Sin nivel con radio no hay nada que medir: la ordenanza no se lo fija.
     if (!nivel || nivel.radio === null) return null
@@ -212,7 +212,7 @@ export default function App() {
       fuente: analisis.fuente,
     })
   }, [
-      analisis.capaBarrios,
+      analisis.activo,
       analisis.tipo,
       nivelActivo,
       analisis.fuente,
@@ -223,13 +223,17 @@ export default function App() {
   ])
 
   const cruce = useMemo(
-    () => (analisis.cruce ? cruzar(ambito, analisis.a, analisis.b, analisis.umbral) : null),
-    [analisis.cruce, analisis.a, analisis.b, analisis.umbral, ambito],
+    () =>
+      analisis.activo === 'cruce' ? cruzar(ambito, analisis.a, analisis.b, analisis.umbral) : null,
+    [analisis.activo, analisis.a, analisis.b, analisis.umbral, ambito],
   )
 
   const hallazgos = useMemo(
-    () => sinInventariar(ambito, equipAmbito, analisis.hallazgos),
-    [ambito, equipAmbito, analisis.hallazgos],
+    () =>
+      analisis.activo === 'inventario'
+        ? sinInventariar(ambito, equipAmbito, analisis.hallazgos)
+        : [],
+    [analisis.activo, ambito, equipAmbito, analisis.hallazgos],
   )
 
   /**
