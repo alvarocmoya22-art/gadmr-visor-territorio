@@ -14,6 +14,11 @@ import PanelAnalisis, {
   ANALISIS_INICIAL,
   type EstadoAnalisis,
 } from './components/PanelAnalisis'
+import PanelEspacial, {
+  ESPACIAL_INICIAL,
+  type EstadoEspacial,
+  type ResumenFlujos,
+} from './components/PanelEspacial'
 import {
   aplicarFiltros,
   filtrarEquipamientos,
@@ -39,7 +44,7 @@ import type { Calle } from './lib/calles'
 type Tema = 'claro' | 'oscuro' | 'sistema'
 
 /** Secciones del panel lateral. */
-type ClavePestana = 'filtros' | 'analisis' | 'datos' | 'calle'
+type ClavePestana = 'filtros' | 'analisis' | 'espacial' | 'datos' | 'calle'
 
 const CAPAS_INICIALES: CapasVisibles = {
   osm: true,
@@ -75,6 +80,7 @@ export default function App() {
   const [mapaBase, setMapaBase] = useState(MAPA_BASE_INICIAL)
   const [mapaCalor, setMapaCalor] = useState<MapaCalor>('ninguno')
   const [analisis, setAnalisis] = useState<EstadoAnalisis>(ANALISIS_INICIAL)
+  const [espacial, setEspacial] = useState<EstadoEspacial>(ESPACIAL_INICIAL)
   const [tema, setTema] = useState<Tema>('sistema')
   const [pestana, setPestana] = useState<ClavePestana>('filtros')
   const hayVersionNueva = useVersionNueva()
@@ -271,6 +277,35 @@ export default function App() {
         ? `${numero(capasMun?.plataformas.length ?? 0)} plataformas · ${numero(barriosAmbito.length)} barrios${hab}`
         : `urbano y rural · ${numero(barriosAmbito.length)} barrios${hab}`
 
+  /*
+   * Los escenarios avanzados solo existen mientras la pestana esta abierta:
+   * deck.gl no se descarga hasta entonces y sus cifras no se calculan antes.
+   */
+  const verEspacial = pestana === 'espacial'
+
+  const [flujos, setFlujos] = useState<{ resumen: ResumenFlujos; arcos: number } | null>(null)
+
+  useEffect(() => {
+    if (!verEspacial || espacial.escenario !== 'flujos') {
+      setFlujos(null)
+      return
+    }
+    let vivo = true
+    void import('./lib/deck/escenarios').then((m) => {
+      if (!vivo) return
+      const arcos = m.asignar(barriosAmbito, equipAmbito, espacial.tipoEquipamiento)
+      setFlujos({ resumen: m.resumenFlujos(arcos), arcos: arcos.length })
+    })
+    return () => {
+      vivo = false
+    }
+  }, [verEspacial, espacial.escenario, espacial.tipoEquipamiento, barriosAmbito, equipAmbito])
+
+  const porCategoriaEspacial = useMemo(
+    () => resumen.porCategoria.map((c) => ({ clave: c.clave as string, n: c.total })),
+    [resumen],
+  )
+
   const ambitoRotulo = (() => {
     const zona =
       filtros.plataforma === URBANO
@@ -360,6 +395,11 @@ export default function App() {
       clave: 'analisis',
       rotulo: 'Análisis',
       nota: 'Déficit por barrio, cruce de categorías y lo no inventariado',
+    },
+    {
+      clave: 'espacial',
+      rotulo: 'Espacial',
+      nota: 'Escenarios en deck.gl: puntos, densidad 3D y asignación barrio–equipamiento',
     },
     {
       clave: 'datos',
@@ -549,6 +589,19 @@ export default function App() {
               cruce ? { a: cruce.a, b: cruce.b, desatendidos: cruce.desatendidos } : null
             }
             onElegirBarrio={elegirBarrio}
+            espacial={
+              verEspacial
+                ? {
+                    escenario: espacial.escenario,
+                    colorPor: espacial.colorPor,
+                    radio: espacial.radio,
+                    peso: espacial.peso,
+                    extruido: espacial.extruido,
+                    tipoEquipamiento: espacial.tipoEquipamiento,
+                    barrios: barriosAmbito,
+                  }
+                : null
+            }
             capas={capas}
             onSeleccionar={elegirPunto}
             onSeleccionarEquipamiento={elegirEquipamiento}
@@ -637,6 +690,20 @@ export default function App() {
                 onElegirBarrio={elegirBarrio}
                 onElegirPunto={elegirPunto}
                 onDescargarHallazgos={descargarHallazgos}
+              />
+            )}
+
+            {pestana === 'espacial' && (
+              <PanelEspacial
+                estado={espacial}
+                onEstado={setEspacial}
+                tipos={tipos}
+                totalPuntos={filtrados.length}
+                porCategoria={porCategoriaEspacial}
+                pendientes={resumen.pendientes}
+                flujos={flujos?.resumen ?? null}
+                arcos={flujos?.arcos ?? 0}
+                ambito={ambitoRotulo}
               />
             )}
 

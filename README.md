@@ -269,6 +269,74 @@ python scripts/convertir_shapefiles.py
 python scripts/indexar_calles.py
 ```
 
+## Análisis espacial con deck.gl
+
+Pestaña **Espacial**: los mismos datos del visor, dibujados con deck.gl 9.4
+sobre el mapa que ya existe. No es una vista aparte —se monta como overlay con
+`MapboxOverlay`—, así que hereda filtros, límites municipales, buscador y
+controles sin duplicar nada.
+
+| Escenario | Capa | De dónde sale |
+|---|---|---|
+| Puntos por categoría | `ScatterplotLayer` | Registros de OSM filtrados, color por categoría o por estado |
+| Densidad en hexágonos | `HexagonLayer` | Los mismos registros, agregados; radio de 75 a 500 m, 3D opcional |
+| Asignación barrio → equipamiento | `ArcLayer` | Centro del barrio al equipamiento más cercano; grosor = población |
+| Recorridos de campo | `TripsLayer` | **Bloqueado**, ver abajo |
+
+**deck.gl se carga solo al abrir la pestaña.** El paquete pesa más que todo el
+resto junto, así que va en `import()` dinámico: el bundle principal sube 14 KB
+y los 858 KB de deck quedan en chunks aparte que solo descarga quien entre.
+
+### Por qué «Recorridos» está bloqueado y no simulado
+
+De los 2.899 registros solo **433 traen `check_date`**, en **17 días
+distintos**, **ninguno con hora**, y **378 de esos 433 son del mismo día**.
+Ordenar los puntos de una jornada para reconstruir por dónde pasó la brigada
+sería inventarse un recorrido que el dato no contiene, así que el escenario
+aparece deshabilitado y explica el motivo en pantalla.
+
+La vía real son las **secuencias de Mapillary**, que sí llevan `captured_at`
+por imagen. Queda pendiente de decidir porque la API limita cada consulta a
+0,01 grados² y habría que trocear cada plataforma en varias peticiones.
+
+### Los arcos no son viajes
+
+No hay ninguna matriz origen-destino en el proyecto. Cada arco une el centro de
+un barrio con el equipamiento más cercano **en línea recta**, y su grosor es la
+población del Censo 2022. Sirve para ver qué equipamiento carga con cuánta
+gente —es el análisis de cobertura dibujado como asignación de demanda—, no
+para medir desplazamientos. La vista lo dice bajo las cifras.
+
+### Añadir un escenario nuevo
+
+1. En `src/config/deckEscenarios.ts`, añade la clave a `ClaveEscenario` y una
+   entrada a `ESCENARIOS` con su rótulo, qué responde, de dónde salen los datos
+   y `bloqueado: null`. Si el dato no da, pon el motivo en `bloqueado` en vez
+   de inventarlo.
+2. En `src/lib/deck/escenarios.ts`, escribe la función que devuelve la capa.
+   Los colores se leen de `lib/deck/colores.ts`, nunca a mano: así siguen los
+   tokens del sistema y el tema oscuro. Si el color depende de un control,
+   declara ese control en `updateTriggers` o deck.gl no repintará.
+3. En `src/components/Mapa.tsx`, añade el caso al `switch` que arma `lista`
+   dentro del efecto del overlay.
+4. En `src/components/PanelEspacial.tsx`, añade sus controles, sus cifras y
+   **su tabla**: un mapa 3D no es legible con un lector de pantalla, así que la
+   tabla es la vía alternativa, no un extra.
+5. Si el escenario necesita un cálculo caro, hazlo en `lib/deck/escenarios.ts`
+   y llámalo desde `App.tsx` solo cuando la pestaña esté abierta, como se hace
+   con `resumenFlujos`.
+
+### Lo que falta por validar
+
+- **`check_date` como fecha de campo.** Se usa como «día en que se verificó»,
+  que es como lo emplea el equipo, pero OSM no garantiza que quien puso la
+  etiqueta fuera la brigada.
+- **El umbral de 1.000 m** que pinta un arco en rojo es una elección mía, no
+  una norma. Los radios normativos son los del Código Urbano y están en la
+  pestaña Análisis.
+- **El tope de 250 arcos.** Por encima la vista deja de leerse; se dibujan los
+  barrios más poblados. Si hace falta el total exacto, está en la tabla.
+
 ## De dónde sale cada análisis
 
 El visor tiene dos inventarios y no dicen lo mismo: el del GADM (291

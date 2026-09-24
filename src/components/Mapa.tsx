@@ -3,7 +3,7 @@ import maplibregl, { type ExpressionSpecification, type StyleSpecification } fro
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { VISTA_INICIAL } from '../config/riobamba'
 import { capaDe, MAPAS_BASE, MAPA_BASE_INICIAL } from '../config/mapasBase'
-import { CATEGORIAS, paletaResuelta, type ClaveCategoria } from '../lib/categorias'
+import { CATEGORIAS, paletaResuelta, POR_CLAVE, type ClaveCategoria } from '../lib/categorias'
 import { aGeoJSON, type Punto } from '../lib/overpass'
 import {
   aGeoJSONEquipamientos,
@@ -14,6 +14,19 @@ import {
 import { urlTeselas as urlTeselasMapillary } from '../lib/mapillary'
 import { distanciaM } from '../lib/geo'
 import type { Calle } from '../lib/calles'
+import type { Barrio } from '../lib/municipal'
+import { PITCH_3D, type ClaveEscenario, type ColorPor, type PesoDensidad } from '../config/deckEscenarios'
+
+/** Lo que el escenario avanzado necesita para dibujarse. */
+export interface Espacial {
+  escenario: ClaveEscenario
+  colorPor: ColorPor
+  radio: number
+  peso: PesoDensidad
+  extruido: boolean
+  tipoEquipamiento: string
+  barrios: Barrio[]
+}
 
 /** Qué densidad se dibuja como mapa de calor. */
 export type MapaCalor = 'ninguno' | 'registros' | 'pendientes' | 'equipamientos'
@@ -66,6 +79,8 @@ interface Props {
   alcance: GeoJSON.FeatureCollection | null
   /** Cruce activo de dos categorías; null cuando no hay ninguno. */
   cruce: CruceMapa | null
+  /** Escenario de visualización avanzada; null mientras no se abre la pestaña. */
+  espacial: Espacial | null
   /** Pinchar un barrio de la coropleta lo pone en el filtro. */
   onElegirBarrio: (nombre: string) => void
   /** Calle buscada: el mapa la encuadra y la marca. */
@@ -73,6 +88,44 @@ interface Props {
 }
 
 const VACIO: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] }
+
+/**
+ * Texto del globo de deck.gl. Devuelve HTML porque es lo que espera la
+ * libreria; el contenido sale de campos propios, nunca de texto externo.
+ */
+function textoTooltip(objeto: unknown): { html: string } | null {
+  if (!objeto || typeof objeto !== 'object') return null
+  const o = objeto as Record<string, unknown>
+  const num = (n: number) => new Intl.NumberFormat('es-EC').format(Math.round(n))
+
+  // Punto de OSM
+  if (typeof o.categoria === 'string' && typeof o.clase === 'string') {
+    const cat = POR_CLAVE.get(o.categoria as ClaveCategoria)?.rotulo ?? String(o.categoria)
+    return {
+      html: `<b>${escapar(String(o.nombre || 'Sin nombre'))}</b><br>${escapar(cat)} · ${escapar(String(o.clase))}`,
+    }
+  }
+  // Arco de asignacion
+  if (typeof o.barrio === 'string' && typeof o.poblacion === 'number') {
+    return {
+      html:
+        `<b>${escapar(o.barrio)}</b><br>${num(o.poblacion)} hab<br>` +
+        `a ${num(o.distancia as number)} m de ${escapar(String(o.equipamiento))}`,
+    }
+  }
+  // Celda del hexagono
+  if (Array.isArray(o.points)) {
+    return { html: `<b>${num(o.points.length)}</b> registros en la celda` }
+  }
+  return null
+}
+
+/** El globo se pinta como HTML, asi que lo que entra se escapa. */
+function escapar(t: string): string {
+  return t.replace(/[&<>"]/g, (c) =>
+    c === '&' ? '&amp;' : c === '<' ? '&lt;' : c === '>' ? '&gt;' : '&quot;',
+  )
+}
 
 /**
  * Rampa del mapa de calor: la secuencial del sistema GADM, con el extremo bajo
@@ -282,6 +335,7 @@ export default function Mapa({
   cobertura,
   alcance,
   cruce,
+  espacial,
   onElegirBarrio,
 }: Props) {
   const contenedor = useRef<HTMLDivElement>(null)
@@ -730,7 +784,23 @@ export default function Mapa({
     const observador = new ResizeObserver(() => m.resize())
     observador.observe(contenedor.current)
 
+    /*
+     * Volver a medir cuando la pestana se hace visible.
+     *
+     * Un mapa montado en una pestana de fondo se inicializa contra un
+     * contenedor de tamano cero, y al mostrarla el contenedor recupera su
+     * tamano sin cambiar de caja, asi que el observador no se entera: el
+     * lienzo se queda en unos pocos pixeles y el mapa aparece en blanco.
+     */
+    const alVerse = () => {
+      if (document.visibilityState === 'visible') requestAnimationFrame(() => m.resize())
+    }
+    document.addEventListener('visibilitychange', alVerse)
+    // Y una vez mas cuando el mapa termina de cargar, por el mismo motivo.
+    m.once('load', () => requestAnimationFrame(() => m.resize()))
+
     return () => {
+      document.removeEventListener('visibilitychange', alVerse)
       observador.disconnect()
       for (const r of rotulos.current) r.remove()
       rotulos.current = []
@@ -821,6 +891,76 @@ export default function Mapa({
       ;(m.getSource('deficit') as maplibregl.GeoJSONSource | undefined)?.setData(deficit ?? VACIO)
     })
   }, [deficit, mapaListo])
+
+  /*
+   * Escenarios avanzados con deck.gl.
+   *
+   * El paquete pesa mas que todo el resto del visor junto, asi que se importa
+   * solo al abrir la pestana: quien no la abra no lo descarga. El overlay se
+   * monta sobre el mismo mapa, de modo que los escenarios heredan los filtros,
+   * los limites municipales y los controles sin duplicar nada.
+   */
+  const overlay = useRef<{ setProps: (p: unknown) => void; finalize?: () => void } | null>(null)
+
+  useEffect(() => {
+    let vivo = true
+    const m = mapa.current
+    if (!m || !mapaListo) return
+
+    if (!espacial) {
+      // Al salir del escenario se retira el overlay y se deshace la
+      // inclinacion: dejar el mapa torcido al volver a la vista normal
+      // desconcierta a quien no sabe que la movio el 3D.
+      if (overlay.current) {
+        m.removeControl(overlay.current as unknown as maplibregl.IControl)
+        overlay.current = null
+        if (m.getPitch() !== 0) m.easeTo({ pitch: 0, duration: 400 })
+      }
+      return
+    }
+
+    void (async () => {
+      const [{ MapboxOverlay }, capas] = await Promise.all([
+        import('@deck.gl/mapbox'),
+        import('../lib/deck/escenarios'),
+      ])
+      if (!vivo || !mapa.current) return
+
+      const puntosDeck = puntos
+      const lista =
+        espacial.escenario === 'puntos'
+          ? [capas.capaPuntos(puntosDeck, espacial.colorPor)]
+          : espacial.escenario === 'densidad'
+            ? [capas.capaDensidad(puntosDeck, espacial.radio, espacial.peso, espacial.extruido)]
+            : espacial.escenario === 'flujos'
+              ? [
+                  capas.capaFlujos(
+                    capas.asignar(espacial.barrios, equipamientos, espacial.tipoEquipamiento),
+                  ),
+                ]
+              : []
+
+      if (!overlay.current) {
+        const nuevo = new MapboxOverlay({
+          interleaved: false,
+          layers: lista,
+          getTooltip: (info: { object?: unknown }) => textoTooltip(info.object),
+        })
+        m.addControl(nuevo as unknown as maplibregl.IControl)
+        overlay.current = nuevo as unknown as typeof overlay.current
+      } else {
+        overlay.current.setProps({ layers: lista })
+      }
+
+      const quiere3D = espacial.escenario === 'densidad' && espacial.extruido
+      if (quiere3D && m.getPitch() < 10) m.easeTo({ pitch: PITCH_3D, duration: 600 })
+      if (!quiere3D && m.getPitch() > 10) m.easeTo({ pitch: 0, duration: 400 })
+    })()
+
+    return () => {
+      vivo = false
+    }
+  }, [espacial, puntos, equipamientos, mapaListo])
 
   // Cobertura y alcance: se calculan fuera y aquí solo se dibujan.
   useEffect(() => {
