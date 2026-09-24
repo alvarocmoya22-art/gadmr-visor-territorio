@@ -269,6 +269,37 @@ python scripts/convertir_shapefiles.py
 python scripts/indexar_calles.py
 ```
 
+## De dónde sale cada análisis
+
+El visor tiene dos inventarios y no dicen lo mismo: el del GADM (291
+equipamientos) y lo levantado en OpenStreetMap. Qué usa cada análisis:
+
+| Análisis | Inventario del GADM | OpenStreetMap |
+|---|---|---|
+| Distancia al equipamiento más cercano | sí, con selector | sí, con selector |
+| Cobertura por radio de servicio | sí, con selector | sí, con selector |
+| Cruce de dos categorías | no | sí |
+| Levantado en OSM y no inventariado | sí, como referencia | sí |
+| Calor de registros y de pendientes | no | sí |
+| Calor de equipamientos | sí | no |
+
+Las **dos capas por barrio comparten tipo y fuente** a propósito. Si cada una
+eligiera por su cuenta, el mapa podría afirmar a la vez que un barrio está a
+900 m del equipamiento más cercano y que está cubierto, porque estarían
+midiendo contra listas distintas.
+
+Poder elegir la fuente no es un adorno. En la plataforma D, con equipamiento de
+salud:
+
+| Qué se cuenta | Puntos | Barrios sin ninguno | Distancia mediana |
+|---|---|---|---|
+| Solo el inventario del GADM | 0 | 25 de 25 | sin dato |
+| Las dos fuentes | 27 | 14 | 148 m |
+
+El inventario municipal no tiene ni un centro de salud dentro de la plataforma
+D. Midiendo solo contra él, el mapa pinta un desierto sanitario que no existe:
+lo que hay es un vacío de inventario, no de servicio.
+
 ## Los radios de cobertura salen de la ordenanza
 
 No son una estimación ni un orden de magnitud: están tomados del **Código

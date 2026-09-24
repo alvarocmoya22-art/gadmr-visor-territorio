@@ -24,7 +24,7 @@ import {
 } from './hooks/usePuntos'
 import { descargarCsv, descargarGeoJSON, descargarShapefile } from './lib/exportar'
 import { barriosDe, calcularDeficit, cruzar, hallazgosACsv, sinInventariar } from './lib/analisis'
-import { calcularCobertura, tiposDisponibles } from './lib/cobertura'
+import { calcularCobertura, serviciosDe, tiposDisponibles } from './lib/cobertura'
 import { claveNivel, nivelDe, nivelInicial } from './lib/norma'
 import { avancePorPlataforma, URBANO } from './lib/municipal'
 import { VISTA_INICIAL } from './config/riobamba'
@@ -157,14 +157,41 @@ export default function App() {
     [capasMun, filtros.plataforma],
   )
 
+  /**
+   * Los puntos que prestan el servicio elegido. Los comparten la capa de
+   * distancia y la de cobertura: si cada una eligiera por su cuenta, el mapa
+   * podria decir a la vez que un barrio esta lejos y que esta cubierto.
+   *
+   * En la capa de distancia no hay nivel, asi que cuentan todos los del tipo;
+   * en cobertura, el nivel puede acotarlos ademas por subtipo.
+   */
+  const nivelActivo = useMemo(
+    () => nivelDe(analisis.tipo, analisis.nivel) ?? nivelInicial(analisis.tipo),
+    [analisis.tipo, analisis.nivel],
+  )
+
+  const servicios = useMemo(
+    () =>
+      serviciosDe(
+        {
+          tipo: analisis.tipo,
+          nivel: analisis.capaBarrios === 'cobertura' ? nivelActivo : null,
+          fuente: analisis.fuente,
+        },
+        equipAmbito,
+        ambitoPlataforma,
+      ),
+    [analisis.tipo, analisis.capaBarrios, analisis.fuente, nivelActivo, equipAmbito, ambitoPlataforma],
+  )
+
   // Solo se calcula con la capa encendida: no hay por que recorrer los barrios
   // mientras nadie la mire.
   const deficit = useMemo(
     () =>
       analisis.capaBarrios === 'deficit' && capasMun
-        ? calcularDeficit(barriosAmbito, equipAmbito, ambitoPlataforma)
+        ? calcularDeficit(barriosAmbito, servicios.servicios, ambitoPlataforma)
         : null,
-    [analisis.capaBarrios, capasMun, barriosAmbito, equipAmbito, ambitoPlataforma],
+    [analisis.capaBarrios, capasMun, barriosAmbito, servicios, ambitoPlataforma],
   )
 
   /**
@@ -176,7 +203,7 @@ export default function App() {
 
   const cobertura = useMemo(() => {
     if (analisis.capaBarrios !== 'cobertura' || !capasMun) return null
-    const nivel = nivelDe(analisis.tipo, analisis.nivel) ?? nivelInicial(analisis.tipo)
+    const nivel = nivelActivo
     // Sin nivel con radio no hay nada que medir: la ordenanza no se lo fija.
     if (!nivel || nivel.radio === null) return null
     return calcularCobertura(barriosAmbito, equipAmbito, ambitoPlataforma, {
@@ -187,7 +214,7 @@ export default function App() {
   }, [
       analisis.capaBarrios,
       analisis.tipo,
-      analisis.nivel,
+      nivelActivo,
       analisis.fuente,
       capasMun,
       barriosAmbito,
@@ -599,6 +626,7 @@ export default function App() {
                 deficit={deficit}
                 cobertura={cobertura}
                 tipos={tipos}
+                servicios={servicios}
                 cruce={cruce}
                 hallazgos={hallazgos}
                 ambito={ambitoRotulo}

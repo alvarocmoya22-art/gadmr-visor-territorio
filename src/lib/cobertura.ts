@@ -53,10 +53,67 @@ export const EQUIVALENTE_OSM: Record<string, ClaveCategoria | undefined> = {
 /** Lado de la rejilla de muestreo, en metros. */
 const PASO_M = 75
 
-/** Un punto que sirve como oferta, venga de donde venga. */
-interface Servicio {
+/**
+ * Un punto que presta el servicio, venga del inventario o de OSM.
+ *
+ * Las dos capas por barrio —distancia y cobertura— miden contra esta misma
+ * lista. Si cada una eligiera su fuente por su cuenta, el mapa podria decir
+ * que un barrio esta a 900 m del equipamiento mas cercano y a la vez que esta
+ * cubierto, porque estarian mirando cosas distintas.
+ */
+export interface Servicio {
   lon: number
   lat: number
+  /** Barrio que lo contiene, para poder contar cuantos tiene cada uno. */
+  barrio: string | null
+}
+
+/** Qué se cuenta como servicio: el tipo, el nivel y de qué fuente. */
+export interface Seleccion {
+  tipo: string
+  /** Nivel de la norma; null cuando no aplica, como en la capa de distancia. */
+  nivel: NivelNorma | null
+  fuente: FuenteCobertura
+}
+
+/**
+ * Los puntos que prestan el servicio elegido.
+ *
+ * Un tipo del inventario no siempre tiene equivalente en OSM, y cuando lo
+ * tiene el nivel puede acotarlo todavia mas: el radio barrial es el de la
+ * escuela, no el de la universidad.
+ */
+export function serviciosDe(
+  { tipo, nivel, fuente }: Seleccion,
+  equipamientos: EquipamientoMunicipal[],
+  puntos: Punto[],
+): { servicios: Servicio[]; deGadm: number; deOsm: number } {
+  const delGadm =
+    fuente === 'osm'
+      ? []
+      : equipamientos.filter(
+          (e) =>
+            e.tipo === tipo &&
+            (!nivel?.subtipos || (e.subtipo !== null && nivel.subtipos.includes(e.subtipo))),
+        )
+
+  const categoria = EQUIVALENTE_OSM[tipo]
+  const delOsm =
+    fuente === 'gadm' || !categoria
+      ? []
+      : puntos.filter(
+          (p) =>
+            p.categoria === categoria && (!nivel?.clasesOsm || nivel.clasesOsm.includes(p.clase)),
+        )
+
+  return {
+    servicios: [
+      ...delGadm.map((e) => ({ lon: e.lon, lat: e.lat, barrio: e.barrioLimite })),
+      ...delOsm.map((p) => ({ lon: p.lon, lat: p.lat, barrio: p.barrio })),
+    ],
+    deGadm: delGadm.length,
+    deOsm: delOsm.length,
+  }
 }
 
 export interface CoberturaBarrio {
@@ -177,33 +234,11 @@ export function calcularCobertura(
   { tipo, nivel, fuente }: OpcionesCobertura,
 ): Cobertura {
   const radio = nivel.radio
-
-  /*
-   * Cuando el nivel distingue subtipos, solo cuentan los suyos: el radio
-   * barrial de 400 m es el de la escuela, no el de la universidad, y meterlas
-   * en el mismo saco infla la cobertura con equipamientos que la norma mide
-   * de otra manera. Donde el inventario no trae subtipo, cuentan todos.
-   */
-  const delGadm =
-    fuente === 'osm'
-      ? []
-      : equipamientos.filter(
-          (e) =>
-            e.tipo === tipo && (!nivel.subtipos || (e.subtipo !== null && nivel.subtipos.includes(e.subtipo))),
-        )
-
-  const categoria = EQUIVALENTE_OSM[tipo]
-  const delOsm =
-    fuente === 'gadm' || !categoria
-      ? []
-      : puntos.filter(
-          (p) => p.categoria === categoria && (!nivel.clasesOsm || nivel.clasesOsm.includes(p.clase)),
-        )
-
-  const servicios: Servicio[] = [
-    ...delGadm.map((e) => ({ lon: e.lon, lat: e.lat })),
-    ...delOsm.map((p) => ({ lon: p.lon, lat: p.lat })),
-  ]
+  const { servicios, deGadm, deOsm } = serviciosDe(
+    { tipo, nivel, fuente },
+    equipamientos,
+    puntos,
+  )
 
   const latRef = barrios.length ? barrios[0].centro[1] : -1.67
   const indice = new Rejilla(servicios, radio, latRef)
@@ -293,8 +328,8 @@ export function calcularCobertura(
     radio,
     fuente,
     servicios: servicios.length,
-    deGadm: delGadm.length,
-    deOsm: delOsm.length,
+    deGadm,
+    deOsm,
     filas,
     geo: { type: 'FeatureCollection', features: rasgos },
     alcance: {

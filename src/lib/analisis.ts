@@ -11,6 +11,7 @@
  */
 import type { ClaveCategoria } from './categorias'
 import { distanciaM } from './geo'
+import type { Servicio } from './cobertura'
 import type { Barrio, EquipamientoMunicipal } from './municipal'
 import { RADIO_COTEJO_M, URBANO } from './municipal'
 import type { Punto } from './overpass'
@@ -35,7 +36,7 @@ export function barriosDe(barrios: Barrio[], plataforma: string | null): Barrio[
 export interface DeficitBarrio {
   nombre: string
   areaHa: number
-  /** Equipamientos del inventario dentro del barrio. */
+  /** Equipamientos dentro del barrio, de la fuente elegida. */
   equipamientos: number
   /** Registros de OSM dentro del barrio. */
   registros: number
@@ -62,12 +63,18 @@ export const CORTES_DEFICIT = [250, 500, 750, 1000]
 /**
  * Distancia de cada barrio al equipamiento más cercano, y cuántos tiene dentro.
  *
+ * `servicios` llega ya elegido —tipo y fuente— por `serviciosDe`, el mismo que
+ * alimenta la cobertura. Medir la distancia solo contra el inventario
+ * municipal daba una lectura torcida: en la plataforma D no hay ni un centro
+ * de salud inventariado y sí veintisiete registrados en OSM, así que el mapa
+ * pintaba un desierto sanitario que no existe.
+ *
  * Recibe los barrios ya recortados al ámbito: quién pertenece a qué plataforma
  * se decide una sola vez, al cargar las capas.
  */
 export function calcularDeficit(
   barrios: Barrio[],
-  equipamientos: EquipamientoMunicipal[],
+  servicios: Servicio[],
   puntos: Punto[],
 ): Deficit {
   const registrosPorBarrio = new Map<string, number>()
@@ -75,8 +82,8 @@ export function calcularDeficit(
     if (p.barrio) registrosPorBarrio.set(p.barrio, (registrosPorBarrio.get(p.barrio) ?? 0) + 1)
   }
   const equipPorBarrio = new Map<string, number>()
-  for (const e of equipamientos) {
-    if (e.barrioLimite) equipPorBarrio.set(e.barrioLimite, (equipPorBarrio.get(e.barrioLimite) ?? 0) + 1)
+  for (const e of servicios) {
+    if (e.barrio) equipPorBarrio.set(e.barrio, (equipPorBarrio.get(e.barrio) ?? 0) + 1)
   }
 
   const filas: DeficitBarrio[] = []
@@ -86,7 +93,7 @@ export function calcularDeficit(
     const [lon, lat] = b.centro
 
     let distancia: number | null = null
-    for (const e of equipamientos) {
+    for (const e of servicios) {
       const d = distanciaM(lon, lat, e.lon, e.lat)
       if (distancia === null || d < distancia) distancia = d
     }
