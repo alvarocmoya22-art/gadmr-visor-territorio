@@ -36,18 +36,20 @@ import type { Punto } from './overpass'
 export type FuenteCobertura = 'gadm' | 'osm' | 'ambas'
 
 /**
- * Categoría de OSM equivalente a cada tipo del inventario municipal.
+ * Categoría de OSM equivalente a cada uso del levantamiento.
  *
- * Solo están los tipos en los que la equivalencia es defendible. Lo religioso
- * no tiene categoría propia en el visor y lo cultural se reparte entre varias,
- * así que para esos el cotejo con OSM se queda fuera antes que dar por bueno
- * un emparejamiento a medias.
+ * Solo están los usos en los que la equivalencia es defendible. Lo religioso no
+ * tiene categoría propia en el visor y lo cultural se reparte entre varias, así
+ * que para esos el cotejo con OSM se queda fuera antes que dar por bueno un
+ * emparejamiento a medias.
  */
 export const EQUIVALENTE_OSM: Record<string, ClaveCategoria | undefined> = {
-  educativo: 'educacion',
-  salud: 'salud',
-  recreativo: 'espacio_publico',
-  administrativo: 'institucional',
+  'Educación': 'educacion',
+  'Salud': 'salud',
+  'Recreativo y Deporte': 'espacio_publico',
+  'Administración Pública': 'institucional',
+  'Seguridad': 'institucional',
+  'Transporte': 'movilidad',
 }
 
 /** Lado de la rejilla de muestreo, en metros. */
@@ -68,12 +70,17 @@ export interface Servicio {
   barrio: string | null
 }
 
-/** Qué se cuenta como servicio: el tipo, el nivel y de qué fuente. */
+/** Si se cuentan los equipamientos publicos, los privados o los dos. */
+export type Gestion = 'todas' | 'Público' | 'Privado'
+
+/** Qué se cuenta como servicio: el tipo, el nivel, la gestión y de qué fuente. */
 export interface Seleccion {
   tipo: string
   /** Nivel de la norma; null cuando no aplica, como en la capa de distancia. */
   nivel: NivelNorma | null
   fuente: FuenteCobertura
+  /** Público, privado o ambos; solo afecta al inventario municipal. */
+  gestion: Gestion
 }
 
 /**
@@ -84,17 +91,25 @@ export interface Seleccion {
  * escuela, no el de la universidad.
  */
 export function serviciosDe(
-  { tipo, nivel, fuente }: Seleccion,
+  { tipo, nivel, fuente, gestion }: Seleccion,
   equipamientos: EquipamientoMunicipal[],
   puntos: Punto[],
 ): { servicios: Servicio[]; deGadm: number; deOsm: number } {
+  /*
+   * El nivel ya no se deduce: el levantamiento trae la tipologia de cada
+   * equipamiento —Barrial, Zonal o Cantonal—, que es la misma columna con la
+   * que la Tabla 3 del Codigo Urbano fija el radio. Medir el radio barrial
+   * contando tambien los zonales infla la cobertura con equipamientos que la
+   * ordenanza mide de otra manera.
+   */
   const delGadm =
     fuente === 'osm'
       ? []
       : equipamientos.filter(
           (e) =>
             e.tipo === tipo &&
-            (!nivel?.subtipos || (e.subtipo !== null && nivel.subtipos.includes(e.subtipo))),
+            (!nivel || !nivel.tipologia || e.tipologia === nivel.tipologia) &&
+            (gestion === 'todas' || e.gestion === gestion),
         )
 
   const categoria = EQUIVALENTE_OSM[tipo]
@@ -219,6 +234,7 @@ export interface OpcionesCobertura {
   /** Nivel de la norma que se está midiendo; de él sale el radio. */
   nivel: NivelNorma & { radio: number }
   fuente: FuenteCobertura
+  gestion: Gestion
 }
 
 /**
@@ -231,11 +247,11 @@ export function calcularCobertura(
   barrios: Barrio[],
   equipamientos: EquipamientoMunicipal[],
   puntos: Punto[],
-  { tipo, nivel, fuente }: OpcionesCobertura,
+  { tipo, nivel, fuente, gestion }: OpcionesCobertura,
 ): Cobertura {
   const radio = nivel.radio
   const { servicios, deGadm, deOsm } = serviciosDe(
-    { tipo, nivel, fuente },
+    { tipo, nivel, fuente, gestion },
     equipamientos,
     puntos,
   )

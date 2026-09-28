@@ -1,7 +1,7 @@
 import { CATEGORIAS, colorSerie, POR_CLAVE, type ClaveCategoria } from '../lib/categorias'
 import { numero, porcentaje } from '../lib/format'
 import type { Cruce, Deficit, Hallazgo } from '../lib/analisis'
-import { EQUIVALENTE_OSM, type Cobertura, type FuenteCobertura } from '../lib/cobertura'
+import { EQUIVALENTE_OSM, type Cobertura, type FuenteCobertura, type Gestion } from '../lib/cobertura'
 import { claveNivel, nivelesMedibles, CITA_NORMA, NORMA } from '../lib/norma'
 
 /**
@@ -23,6 +23,8 @@ export interface EstadoAnalisis {
   nivel: string
   /** De dónde salen los equipamientos que cuentan como servicio. */
   fuente: FuenteCobertura
+  /** Público, privado o los dos. */
+  gestion: Gestion
   a: ClaveCategoria
   b: ClaveCategoria
   /** Distancia, en metros, por debajo de la cual se da por atendido. */
@@ -33,9 +35,10 @@ export interface EstadoAnalisis {
 
 export const ANALISIS_INICIAL: EstadoAnalisis = {
   activo: 'ninguno',
-  tipo: 'educativo',
+  tipo: 'Educación',
   nivel: 'EE1|400',
   fuente: 'gadm',
+  gestion: 'todas',
   a: 'comercio',
   b: 'salud',
   umbral: 500,
@@ -234,6 +237,20 @@ export default function PanelAnalisis({
                   {t.tipo} · {numero(t.n)}
                 </option>
               ))}
+            </select>
+          </label>
+
+          <label className="block text-[11px]" style={{ color: 'var(--gr-tinta-3)' }}>
+            Gestión del equipamiento
+            <select
+              value={analisis.gestion}
+              onChange={(e) => cambiar({ gestion: e.target.value as Gestion })}
+              className="mt-0.5 w-full rounded border px-2 py-1.5 text-[13px]"
+              style={campo}
+            >
+              <option value="todas">Público y privado</option>
+              <option value="Público">Solo público</option>
+              <option value="Privado">Solo privado</option>
             </select>
           </label>
 

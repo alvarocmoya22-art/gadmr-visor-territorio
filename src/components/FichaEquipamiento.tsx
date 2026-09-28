@@ -85,14 +85,32 @@ export default function FichaEquipamiento({ equipamiento: e, onCerrar, onVerEnOs
       <p className="gr-nota">{explicar(e.cotejo)}</p>
 
       <dl className="gr-ficha">
-        {e.subtipo && (
+        {e.elemento && (
           <>
-            <dt>Subtipo</dt>
-            <dd className="gr-num">{e.subtipo}</dd>
+            <dt>Elemento</dt>
+            <dd>{e.elemento}</dd>
+          </>
+        )}
+        {e.tipologia && (
+          <>
+            <dt>Tipología</dt>
+            <dd>{e.tipologia}</dd>
+          </>
+        )}
+        {e.gestion && (
+          <>
+            <dt>Gestión</dt>
+            <dd>{e.gestion}</dd>
+          </>
+        )}
+        {e.estado && (
+          <>
+            <dt>Estado observado</dt>
+            <dd>{e.estado}</dd>
           </>
         )}
         <dt>Barrio</dt>
-        <dd>{e.barrio ?? '—'}</dd>
+        <dd>{e.barrioLimite ?? '—'}</dd>
         <dt>Plataforma</dt>
         <dd className="gr-num">{e.plataforma ?? 'fuera de plataforma'}</dd>
         <dt>Coordenadas (WGS 84)</dt>

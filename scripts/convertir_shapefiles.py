@@ -9,6 +9,9 @@ import geopandas as gpd
 ORIGEN = r"C:/Users/alvar/OneDrive/INFORMACION RIOBAMBA/PROYECTO PLATAFORMA/PLATAFORMAS"
 # Los barrios llegaron despues, actualizados y en su propia carpeta.
 ORIGEN_BARRIOS = r"C:/Users/alvar/OneDrive/Escritorio/default/gis_barrios_urb"
+# El levantamiento del entorno sustituye al inventario de equipamientos viejo:
+# 1.094 registros con tipologia y uso segun la Tabla 3 del Codigo Urbano.
+ORIGEN_ENTORNO = r"C:/Users/alvar/OneDrive/Escritorio/default/gis_levantamiento_entorno"
 DESTINO = r"C:/Users/alvar/OneDrive/Escritorio/default/gadmr-visor-territorio/public/datos"
 LOG = []
 
@@ -68,13 +71,56 @@ log(f"  barrios con area declarada fuera de sitio: {malos} de {len(b)}")
 escribir(b[["numero", "nombre", "area_ha", "area_ha_geom", "catastro_2014", "geometry"]],
          "barrios", 3)
 
-# --- Equipamientos municipales (se descarta `path`: rutas del disco del autor)
-e = gpd.read_file(f"{ORIGEN}/EQUIPAMIENTOS_CARGA.shp")
-e = e.rename(columns={"nam": "nombre", "equipa": "tipo", "decr": "subtipo",
-                      "barrio": "barrio", "layer": "capa_origen"})
-e["nombre"] = e["nombre"].fillna(e["name"]).fillna("")
-e["tipo"] = e["tipo"].str.strip().str.replace(r"\s*/\s*", " / ", regex=True)
-escribir(e[["id", "nombre", "tipo", "subtipo", "barrio", "capa_origen", "geometry"]], "equipamientos")
+# --- Equipamientos: levantamiento del entorno
+#
+# Sustituye al inventario anterior de 291 registros. Lo importante no es que
+# sean mas: es que trae `tipologia` (Barrial, Zonal, Cantonal) y `tipo_eleme`
+# con los doce usos de la Tabla 3 del Codigo Urbano, asi que el radio de
+# influencia se aplica al equipamiento que corresponde sin tener que deducirlo.
+e = gpd.read_file(f"{ORIGEN_ENTORNO}/levantamiento_entorno.shp").to_crs(4326)
+e = e.rename(columns={
+    "tipo_eleme": "tipo",
+    "elemento": "elemento",
+    "nombre_equ": "nombre",
+    "tipo_equip": "gestion",
+    "tipologia": "tipologia",
+    "estado": "estado",
+    "plataforma": "plataforma_dec",
+    "parroquia_": "parroquia",
+    "observacio": "observaciones",
+    "globalid": "id",
+})
+
+# Tres registros llegaron con coordenadas imposibles —latitud -90 y longitudes
+# de 107 y 132—, que son fallos de captura del GPS. No se pueden ubicar, asi
+# que se descartan y se listan en el log para que se corrijan en origen.
+e["lon"] = e.geometry.x
+e["lat"] = e.geometry.y
+fuera = ~e["lon"].between(-79.2, -78.3) | ~e["lat"].between(-2.2, -1.4)
+if fuera.any():
+    log(f"  equipamientos con coordenadas fuera del canton: {int(fuera.sum())} (descartados)")
+    for _, r in e[fuera].iterrows():
+        log(f"      {r['nombre'][:40]:42} {r['lon']:12.5f} {r['lat']:11.5f}  [{r['tipo']}]")
+e = e[~fuera].copy()
+
+# Varios equipamientos comparten posicion exacta: en un parque se levanta un
+# punto de referencia y se le cuelgan la casa comunal, las canchas y la parada.
+# Es legitimo, pero conviene saber cuantos son porque inflan la densidad.
+coubicados = int(e.duplicated(subset=["lon", "lat"], keep=False).sum())
+if coubicados:
+    log(f"  equipamientos que comparten posicion con otro: {coubicados}")
+
+e["nombre"] = e["nombre"].fillna("").astype(str).str.strip()
+for c in ("tipo", "tipologia", "gestion", "estado", "elemento", "parroquia"):
+    e[c] = e[c].fillna("").astype(str).str.strip()
+e["observaciones"] = e["observaciones"].fillna("").astype(str).str.strip()
+
+log(f"  usos: {e['tipo'].nunique()} · tipologias: {sorted(t for t in e['tipologia'].unique() if t)}")
+escribir(
+    e[["id", "nombre", "tipo", "elemento", "tipologia", "gestion", "estado",
+       "parroquia", "observaciones", "geometry"]],
+    "equipamientos",
+)
 
 io.open(f"{DESTINO}/../../_conversion.log", "w", encoding="utf-8").write("\n".join(LOG))
 log("listo")

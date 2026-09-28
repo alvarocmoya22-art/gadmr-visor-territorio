@@ -48,9 +48,19 @@ export interface Barrio {
 export interface EquipamientoMunicipal {
   id: string
   nombre: string
+  /** Uso segun la Tabla 3 del Codigo Urbano: Educacion, Salud, Transporte... */
   tipo: string
-  subtipo: string | null
-  barrio: string | null
+  /** Actividad concreta, p. ej. «Iglesias hasta 200 puestos». */
+  elemento: string
+  /** Nivel de la ordenanza: Barrial, Zonal o Cantonal. */
+  tipologia: string
+  /** Publico o Privado. */
+  gestion: string
+  /** Estado fisico observado en campo: Bueno, Regular o Malo. */
+  estado: string
+  /** Parroquia declarada en el levantamiento. */
+  parroquia: string
+  observaciones: string
   lon: number
   lat: number
   /** Plataforma que lo contiene, si cae dentro de alguna. */
@@ -325,8 +335,12 @@ export async function cargarCapas(): Promise<CapasMunicipales> {
       id: `m${i}`,
       nombre: String(p.nombre ?? '').trim(),
       tipo: String(p.tipo ?? 'sin tipo'),
-      subtipo: p.subtipo ? String(p.subtipo) : null,
-      barrio: p.barrio ? String(p.barrio) : null,
+      elemento: String(p.elemento ?? ''),
+      tipologia: String(p.tipologia ?? ''),
+      gestion: String(p.gestion ?? ''),
+      estado: String(p.estado ?? ''),
+      parroquia: String(p.parroquia ?? ''),
+      observaciones: String(p.observaciones ?? ''),
       lon: c[0],
       lat: c[1],
       plataforma: plataformaDe(c[0], c[1], plataformas),
@@ -409,6 +423,8 @@ export function aGeoJSONEquipamientos(
         id: e.id,
         nombre: e.nombre,
         tipo: e.tipo,
+        tipologia: e.tipologia,
+        gestion: e.gestion,
         estado: e.cotejo.estado,
         plataforma: e.plataforma ?? '',
       },

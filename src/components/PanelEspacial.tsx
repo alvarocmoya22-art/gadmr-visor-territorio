@@ -32,7 +32,7 @@ export const ESPACIAL_INICIAL: EstadoEspacial = {
   radio: RADIO_HEXAGONO_INICIAL,
   peso: 'registros',
   extruido: true,
-  tipoEquipamiento: 'educativo',
+  tipoEquipamiento: 'Educación',
   altura: 'poblacion',
   colorBarrio: 'distancia',
 }

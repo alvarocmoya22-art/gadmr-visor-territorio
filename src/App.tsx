@@ -184,11 +184,20 @@ export default function App() {
           tipo: analisis.tipo,
           nivel: analisis.activo === 'cobertura' ? nivelActivo : null,
           fuente: analisis.fuente,
+          gestion: analisis.gestion,
         },
         equipAmbito,
         ambitoPlataforma,
       ),
-    [analisis.tipo, analisis.activo, analisis.fuente, nivelActivo, equipAmbito, ambitoPlataforma],
+    [
+      analisis.tipo,
+      analisis.activo,
+      analisis.fuente,
+      analisis.gestion,
+      nivelActivo,
+      equipAmbito,
+      ambitoPlataforma,
+    ],
   )
 
   // Solo se calcula con la capa encendida: no hay por que recorrer los barrios
@@ -217,12 +226,14 @@ export default function App() {
       tipo: analisis.tipo,
       nivel: nivel as typeof nivel & { radio: number },
       fuente: analisis.fuente,
+      gestion: analisis.gestion,
     })
   }, [
       analisis.activo,
       analisis.tipo,
       nivelActivo,
       analisis.fuente,
+      analisis.gestion,
       capasMun,
       barriosAmbito,
       equipAmbito,

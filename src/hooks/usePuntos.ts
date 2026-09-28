@@ -143,7 +143,10 @@ export function filtrarEquipamientos(
       if (!e.plataforma) return false
     } else if (f.plataforma && e.plataforma !== f.plataforma) return false
     if (f.barrio && e.barrioLimite !== f.barrio) return false
-    if (texto && !`${e.nombre} ${e.tipo} ${e.barrio ?? ''}`.toLowerCase().includes(texto))
+    if (
+      texto &&
+      !`${e.nombre} ${e.tipo} ${e.elemento} ${e.barrioLimite ?? ''}`.toLowerCase().includes(texto)
+    )
       return false
     return true
   })

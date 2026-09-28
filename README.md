@@ -59,7 +59,7 @@ al principio de `scripts/convertir_shapefiles.py`.
 | Plataformas | 18 (A–Q más Ñ) | **Unidad de asignación de campo**: filtro, encuadre y avance por sector |
 | Parroquias urbanas | 5 | Contexto: Lizarzaburu, Velasco, Yaruquíes, Veloz, Maldonado |
 | Barrios | 212 polígonos, 204 barrios | Contexto y filtro, con el nombre rotulado sobre el mapa |
-| Equipamientos | 291 | Inventario propio, contrastado punto a punto contra OSM |
+| Equipamientos | 1.091 | Levantamiento del entorno, contrastado punto a punto contra OSM |
 
 Se convierten con `scripts/convertir_shapefiles.py` (requiere `geopandas`), que
 reproyecta a WGS84 y escribe en `public/datos/`. **Esa es la única vía de
@@ -384,6 +384,57 @@ El inventario municipal no tiene ni un centro de salud dentro de la plataforma
 D. Midiendo solo contra él, el mapa pinta un desierto sanitario que no existe:
 lo que hay es un vacío de inventario, no de servicio.
 
+## El levantamiento del entorno
+
+La capa de equipamientos es `gis_levantamiento_entorno/levantamiento_entorno.shp`,
+entregada por la institución en septiembre de 2026. Sustituye al inventario
+anterior de 291 registros, y lo que la hace mejor no es que tenga 1.094: es que
+**viene clasificada con el vocabulario de la propia ordenanza**.
+
+| Campo | Qué trae |
+|---|---|
+| `tipo_eleme` | Los doce usos de la Tabla 3: Educación, Salud, Recreativo y Deporte, Transporte, Religioso, Cultural, Administración Pública, Seguridad, Bienestar Social, Infraestructura, Especial, Servicios Funerarios |
+| `tipologia` | **Barrial, Zonal o Cantonal** — la columna que fija el radio |
+| `elemento` | La actividad concreta, con los mismos nombres de la tabla |
+| `tipo_equip` | Público (643) o Privado (451) |
+| `estado` | Bueno, Regular o Malo, observado en campo |
+| `plataforma`, `parroquia_` | Declaradas por el levantador |
+
+Antes, el nivel normativo se deducía del subtipo de OSM y solo funcionaba en lo
+educativo. Ahora **el radio se aplica al equipamiento que la propia institución
+clasificó en ese nivel**, sin adivinar.
+
+La plataforma declarada coincide con la geométrica en 1.058 de 1.094 registros;
+solo dos discrepan.
+
+### Lo que se descarta al convertir
+
+**Tres registros con coordenadas imposibles** —latitud −90 y longitudes de 107 y
+132— que son fallos de captura del GPS: «Colegio», «Carlos Garbay (sede…)» y
+«Vicente Ramón Roca». No se pueden ubicar, así que el script los descarta y los
+lista en el log para que se corrijan en origen. Por eso el visor carga 1.091 y
+no 1.094.
+
+**47 registros comparten posición con otro**, en 13 puntos. En el parque central
+de Yaruquíes hay seis en las mismas coordenadas: casa comunal, estadio, parada
+de taxis, parada de bus y dos canchas de vóley con el mismo nombre. Parte es
+legítimo —se levanta un punto de referencia y se le cuelgan los equipamientos
+del sitio— y parte parece duplicado. No se tocan, pero inflan la densidad ahí.
+
+### Público y privado no dan lo mismo
+
+El visor carga los dos y deja elegir, porque la diferencia es grande y es la que
+importa para lo que la ordenanza le exige al GADM. Educación de nivel barrial
+(400 m) en Riobamba urbano:
+
+| Qué se cuenta | Equipamientos | Población cubierta | Personas fuera |
+|---|---|---|---|
+| Público y privado | 70 | 68,5 % | 54.419 |
+| **Solo público** | **38** | **47,5 %** | **90.830** |
+
+Más de la mitad de la población urbana no tiene una escuela **pública** de nivel
+barrial a 400 metros.
+
 ## Los radios de cobertura salen de la ordenanza
 
 No son una estimación ni un orden de magnitud: están tomados del **Código
@@ -408,18 +459,15 @@ en pantalla en vez de dejar el hueco.
 
 ### El nivel no es solo un número, también elige qué se cuenta
 
-El radio barrial de 400 m es el de la escuela, no el de la universidad. Como el
-inventario municipal **sí trae subtipo en lo educativo** —63 `school`, 20
-`college`, 10 `kindergarten`, 6 `university`—, cada nivel cuenta solo los suyos:
+El radio barrial de 400 m es el de la escuela, no el de la universidad. Desde el
+levantamiento del entorno esto ya no se deduce: **cada equipamiento trae su
+tipología** y solo entran los de la tipología del nivel que se está midiendo.
 
-- **EE1 Barrial**: `school` y `kindergarten`
-- **EE2 Zonal**: `college`
-- **EE3 Cantonal**: `university`
-
-Lo mismo se aplica a los registros de OSM cuando se cuentan como servicio, por
-su etiqueta `amenity`. En los demás tipos el inventario no trae subtipo, así que
-todos los equipamientos se miden con el nivel que se elija; conviene tenerlo
-presente al leer la cifra.
+Para los registros de OSM, que no conocen la tipología de la ordenanza, se sigue
+usando la etiqueta `amenity` donde la equivalencia es clara —`school` y
+`kindergarten` para el nivel barrial de educación, `college` para el zonal,
+`university` para el cantonal—. Donde no hay equivalencia fiable entra toda la
+categoría.
 
 ### Lo que sale al aplicarlo
 
