@@ -120,7 +120,15 @@ export const MAPAS_BASE: MapaBase[] = [
   },
 ]
 
-export const MAPA_BASE_INICIAL = 'osm'
+/**
+ * Con qué fondo abre el visor.
+ *
+ * El lienzo oscuro, y no el callejero: lo primero que se ve al entrar son los
+ * puntos del levantamiento y las capas de análisis, y sobre gris casi negro se
+ * leen solos. El callejero sigue a un clic, que es lo que hace falta cuando lo
+ * que se busca es el nombre de una calle o un comercio.
+ */
+export const MAPA_BASE_INICIAL = 'oscuro'
 
 /** Identificador de la capa raster de un mapa base. */
 export const capaDe = (clave: string) => `base-${clave}`
