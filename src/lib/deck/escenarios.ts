@@ -8,7 +8,7 @@
  * El módulo se carga con `import()` desde el mapa: deck.gl pesa lo suyo y no
  * tiene por qué descargarlo quien no abra la pestaña.
  */
-import { ArcLayer, PathLayer, PolygonLayer, ScatterplotLayer } from '@deck.gl/layers'
+import { ArcLayer, PolygonLayer, ScatterplotLayer } from '@deck.gl/layers'
 import { HexagonLayer } from '@deck.gl/aggregation-layers'
 import type { Layer } from '@deck.gl/core'
 import {
@@ -29,7 +29,6 @@ import {
   ARCO_DESTINO,
   ARCO_LEJOS,
   ARCO_ORIGEN,
-  colorBanda,
   paletaCategorias,
   paletaFrescura,
   RAMPA_DENSIDAD,
@@ -307,74 +306,14 @@ export function capaBarrios(
  * donde se puede andar, y una mancha cerrada daría por alcanzado el interior
  * de las manzanas, que es justo lo que no se recorre.
  */
-/**
- * Superficie servida, por bandas de tiempo.
- *
- * Es la capa principal de la isócrona: la mancha del territorio al que se
- * llega andando. Las bandas llegan de la más lejana a la más cercana y se
- * dibujan en ese orden, así que la de cinco minutos queda encima.
- *
- * El relleno va translúcido a propósito. Una isócrona opaca esconde justo lo
- * que hace falta para leerla —dónde está la calle, dónde el barrio, dónde el
- * equipamiento del que sale—, y el contorno marcado basta para ver el límite.
+/*
+ * Aqui vivian las dos capas de la isocrona —la mancha y las calles— y ya no:
+ * las dibuja MapLibre, en `components/Mapa.tsx`. Son poligonos y lineas, nada
+ * que necesite un lienzo WebGL propio, y en cambio importaba mucho donde
+ * quedaban en la pila: deck pinta encima de todo el mapa, asi que la mancha
+ * tapaba los puntos del inventario y los proyectos. El analisis existe para
+ * explicar esos puntos, no para esconderlos.
  */
-export function capaBandas(
-  bandas: { minutos: number; piezas: [number, number][][][] }[],
-  tramos: number[],
-): Layer {
-  const orden = [...tramos].sort((a, b) => a - b)
-  const color = (min: number) => colorBanda(min, orden)
-  type Pieza = { minutos: number; anillos: [number, number][][] }
-  const piezas: Pieza[] = bandas.flatMap((b) =>
-    b.piezas.map((anillos) => ({ minutos: b.minutos, anillos })),
-  )
-  return new PolygonLayer<Pieza>({
-    id: 'deck-isocronas-area',
-    data: piezas,
-    getPolygon: (d) => d.anillos,
-    filled: true,
-    stroked: true,
-    getFillColor: (d) => {
-      const [r, g, b] = color(d.minutos)
-      return [r, g, b, 120]
-    },
-    getLineColor: (d) => {
-      const [r, g, b] = color(d.minutos)
-      return [r, g, b, 255]
-    },
-    getLineWidth: 2.5,
-    lineWidthUnits: 'pixels',
-    lineWidthMinPixels: 1,
-    pickable: true,
-    updateTriggers: { getFillColor: [orden.join()], getLineColor: [orden.join()] },
-  })
-}
-
-export function capaIsocronas(
-  red: { aristas: [number, number, number, number[][]][] },
-  alcanzables: { arista: number; minutos: number }[],
-  tramos: number[],
-): Layer {
-  // Del claro al oscuro segun el tiempo, con la secuencial del sistema.
-  const color = (min: number): Rgba => {
-    const i = tramos.findIndex((t) => min <= t)
-    const paso = i < 0 ? RAMPA_DENSIDAD.length - 1 : 2 + i
-    return RAMPA_DENSIDAD[Math.min(RAMPA_DENSIDAD.length - 1, paso)]
-  }
-  return new PathLayer<{ arista: number; minutos: number }>({
-    id: 'deck-isocronas',
-    data: alcanzables,
-    getPath: (d) => red.aristas[d.arista][3] as unknown as [number, number][],
-    getColor: (d) => color(d.minutos),
-    getWidth: 4,
-    widthUnits: 'pixels',
-    widthMinPixels: 2,
-    capRounded: true,
-    jointRounded: true,
-    pickable: true,
-    updateTriggers: { getColor: [tramos.join(), alcanzables.length] },
-  })
-}
 
 // ───────────────────────────────────────────────────────── cifras
 

@@ -321,7 +321,7 @@ controles sin duplicar nada.
 |---|---|---|
 | Puntos por categoría | `ScatterplotLayer` | Registros de OSM filtrados, color por categoría o por estado |
 | Densidad en hexágonos | `HexagonLayer` | Los mismos registros, agregados; radio de 75 a 500 m, 3D opcional |
-| Isócronas a pie | `PolygonLayer` | Superficie a la que se llega andando en 5, 10 o 15 min desde el equipamiento más cercano, por la red real |
+| Isócronas a pie | capas de MapLibre | Superficie a la que se llega andando en 5, 10 o 15 min desde el equipamiento más cercano, por la red real |
 | Barrios en 3D | `PolygonLayer` | Altura por población o viviendas, color por distancia al equipamiento o por carencia de servicios básicos |
 | Asignación barrio → equipamiento | `ArcLayer` | Centro del barrio al equipamiento más cercano; grosor = población |
 | Recorridos de campo | `TripsLayer` | **Bloqueado**, ver abajo |
@@ -388,6 +388,22 @@ de la manzana **sí se alcanza** —es donde vive la gente— y lo que faltaba e
 decir con cuántos metros, no evitar el polígono. Ahora esos metros son un
 parámetro a la vista (`ALCANCE_FUERA_DE_CALLE_M`) y no un efecto del dibujo. Las
 calles siguen estando: se encienden con una casilla, encima de la mancha.
+
+#### La dibuja MapLibre, no deck
+
+Son cuatro polígonos y unas líneas, nada que necesite un lienzo WebGL propio. Lo
+que sí importa es dónde quedan en la pila: **deck pinta encima de todo el mapa**,
+así que la mancha tapaba los puntos del inventario y los proyectos y los dejaba
+en gris. Eso invierte la lectura, porque el análisis existe para explicar esos
+puntos, no para esconderlos.
+
+Se probó antes el modo intercalado de deck (`interleaved` con `beforeId`), que
+en teoría es la solución limpia; en la práctica no llegó a insertar las capas en
+el estilo. Declararlas como capas de MapLibre justo debajo de la simbología de
+puntos resuelve lo mismo y, además, hace que el problema no se pueda repetir. Lo
+tridimensional —hexágonos y barrios extruidos— sigue en deck y sigue encima, que
+ahí sí corresponde: un bloque alto tiene que ocultar lo que le queda detrás o
+deja de ser volumen.
 
 #### Se calcula con todo el urbano y se recorta después
 

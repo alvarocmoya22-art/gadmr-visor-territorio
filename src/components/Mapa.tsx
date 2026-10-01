@@ -4,6 +4,7 @@ import 'maplibre-gl/dist/maplibre-gl.css'
 import { VISTA_INICIAL } from '../config/riobamba'
 import { capaDe, capaRotulosDe, MAPAS_BASE, MAPA_BASE_INICIAL } from '../config/mapasBase'
 import { ICONOS_PROYECTO, imagenDeIcono, nombreIcono } from '../config/iconosProyecto'
+import { colorBanda } from '../lib/deck/colores'
 import { CATEGORIAS, paletaResuelta, POR_CLAVE, type ClaveCategoria } from '../lib/categorias'
 import { paletaUsos } from '../lib/usos'
 import { aGeoJSON, type Punto } from '../lib/overpass'
@@ -697,6 +698,49 @@ export default function Mapa({
       }
 
       // ── Puntos OSM
+      /*
+       * ── Isocrona a pie.
+       *
+       * La dibuja MapLibre y no deck a proposito. Son cuatro poligonos y unas
+       * lineas, nada que necesite WebGL propio, y en cambio importa mucho donde
+       * quedan en la pila: deck pinta su lienzo encima de todo el mapa, asi que
+       * la mancha tapaba los puntos del inventario y los proyectos. Eso
+       * invierte la lectura, porque el analisis existe para explicar esos
+       * puntos, no para esconderlos. Declaradas aqui, justo debajo de la
+       * simbologia de puntos, el problema no se puede repetir.
+       */
+      m.addSource('isocrona', { type: 'geojson', data: VACIO })
+      m.addLayer({
+        id: 'isocrona-relleno',
+        type: 'fill',
+        source: 'isocrona',
+        layout: { visibility: 'none' },
+        paint: {
+          'fill-color': ['get', 'color'],
+          'fill-opacity': 0.47,
+        },
+      })
+      m.addLayer({
+        id: 'isocrona-borde',
+        type: 'line',
+        source: 'isocrona',
+        layout: { visibility: 'none', 'line-join': 'round' },
+        paint: { 'line-color': ['get', 'color'], 'line-width': 2.5 },
+      })
+      // Las calles por donde se llega, cuando se piden: encima de la mancha
+      // que las contiene y debajo de los puntos, como todo lo demas.
+      m.addSource('isocrona-calles', { type: 'geojson', data: VACIO })
+      m.addLayer({
+        id: 'isocrona-calles-linea',
+        type: 'line',
+        source: 'isocrona-calles',
+        layout: { visibility: 'none', 'line-cap': 'round', 'line-join': 'round' },
+        paint: {
+          'line-color': ['get', 'color'],
+          'line-width': ['interpolate', ['linear'], ['zoom'], 11, 1.5, 16, 3.5],
+        },
+      })
+
       m.addSource('pois', { type: 'geojson', data: VACIO, promoteId: 'id' })
       m.addLayer({
         id: 'pois-halo',
@@ -1130,6 +1174,43 @@ export default function Mapa({
     })
   }, [capasMunicipales, mapaListo])
 
+  /*
+   * La mancha de la isocrona y, si se piden, las calles por donde se llega.
+   *
+   * El color se resuelve aqui y viaja en el propio dato: `colorBanda` es la
+   * misma funcion que usa la leyenda del panel, de modo que el tramo de cinco
+   * minutos no puede salir de un color en la tabla y de otro en el mapa.
+   */
+  useEffect(() => {
+    cuandoListo((m) => {
+      const iso = espacial?.escenario === 'isocronas' ? espacial.isocrona : null
+      const fuente = (id: string) => m.getSource(id) as maplibregl.GeoJSONSource | undefined
+      if (!iso) {
+        fuente('isocrona')?.setData(VACIO)
+        fuente('isocrona-calles')?.setData(VACIO)
+        return
+      }
+      const rgba = (c: [number, number, number, number]) => `rgb(${c[0]},${c[1]},${c[2]})`
+      // De la mas lejana a la mas cercana: en una sola capa manda el orden del
+      // dato, y la de cinco minutos tiene que quedar encima de la de quince.
+      const bandas: GeoJSON.Feature[] = iso.bandas.map((b) => ({
+        type: 'Feature',
+        geometry: { type: 'MultiPolygon', coordinates: b.piezas },
+        properties: { minutos: b.minutos, color: rgba(colorBanda(b.minutos, iso.tramos)) },
+      }))
+      fuente('isocrona')?.setData({ type: 'FeatureCollection', features: bandas })
+
+      const calles: GeoJSON.Feature[] = espacial?.verCalles
+        ? iso.alcanzables.map((t) => ({
+            type: 'Feature',
+            geometry: { type: 'LineString', coordinates: iso.red.aristas[t.arista][3] },
+            properties: { color: rgba(colorBanda(t.minutos, iso.tramos)) },
+          }))
+        : []
+      fuente('isocrona-calles')?.setData({ type: 'FeatureCollection', features: calles })
+    })
+  }, [espacial, mapaListo])
+
   // Coropleta del déficit: se recalcula fuera y aquí solo se dibuja.
   useEffect(() => {
     cuandoListo((m) => {
@@ -1190,23 +1271,11 @@ export default function Mapa({
                   espacial.extruido,
                 ),
               ]
-            : espacial.escenario === 'isocronas'
-              ? espacial.isocrona
-                ? [
-                    // La mancha primero y las calles encima: al reves el
-                    // relleno taparia justo la red que lo explica.
-                    capas.capaBandas(espacial.isocrona.bandas, espacial.isocrona.tramos),
-                    ...(espacial.verCalles
-                      ? [
-                          capas.capaIsocronas(
-                            espacial.isocrona.red,
-                            espacial.isocrona.alcanzables,
-                            espacial.isocrona.tramos,
-                          ),
-                        ]
-                      : []),
-                  ]
-                : []
+            : // La isocrona la dibuja MapLibre, no deck: ver las capas
+              // `isocrona-*`. Son poligonos y lineas, y lo que importa es que
+              // queden por debajo de los puntos.
+              espacial.escenario === 'isocronas'
+              ? []
             : espacial.escenario === 'barrios'
               ? [
                   capas.capaBarrios(
@@ -1399,6 +1468,10 @@ export default function Mapa({
       poner('cobertura-relleno', cobertura !== null)
       poner('cobertura-linea', cobertura !== null)
       poner('alcance-linea', alcance !== null)
+      const hayIsocrona = espacial?.escenario === 'isocronas' && !!espacial.isocrona
+      poner('isocrona-relleno', hayIsocrona)
+      poner('isocrona-borde', hayIsocrona)
+      poner('isocrona-calles-linea', hayIsocrona && espacial.verCalles)
       poner('cruce-alerta', cruce !== null && capas.osm)
 
       /*
@@ -1424,7 +1497,7 @@ export default function Mapa({
         r.getElement().style.display = capas.plataformas ? '' : 'none'
       }
     })
-  }, [capas, mapaCalor, deficit, cobertura, alcance, cruce, mapaListo])
+  }, [capas, mapaCalor, deficit, cobertura, alcance, cruce, mapaListo, espacial])
 
   /**
    * Plataforma activa: se rellena, se engruesa su contorno, las demás se
