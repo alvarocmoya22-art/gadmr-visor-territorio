@@ -424,6 +424,11 @@ export default function App() {
     poblacionPorTramo: Map<number, number>
     origenes: number
     sueltos: number
+    /** Proyectos de 2026 que crean alcance de este uso. */
+    proyectos: number
+    /** Habitantes y hectareas que suma el plan; null si no hay con que sumar. */
+    aporteHabitantes: number | null
+    aporteHectareas: number | null
   } | null>(null)
 
   /**
@@ -435,12 +440,7 @@ export default function App() {
    * aqui es lo que permite que cambiar de plataforma o de barrio sea solo un
    * recorte y no un analisis nuevo.
    */
-  const analisisUrbano = useRef<{
-    clave: string
-    red: Red
-    iso: Isocrona
-    campo: Campo
-  } | null>(null)
+  const analisisUrbano = useRef(new Map<string, { red: Red; iso: Isocrona; campo: Campo }>())
 
   useEffect(() => {
     if (!verEspacial || espacial.escenario !== 'isocronas') {
@@ -455,32 +455,37 @@ export default function App() {
       if (!vivo) return
       const tramos = iso.MINUTOS.filter((m) => m <= espacial.minutos)
 
-      const origenes = equipUrbano.filter(
-        (e) =>
-          e.tipo === espacial.tipoEquipamiento &&
-          (espacial.gestion === 'todas' || e.gestion === espacial.gestion),
-      )
+      const construidos = equipUrbano
+        .filter(
+          (e) =>
+            e.tipo === espacial.tipoEquipamiento &&
+            (espacial.gestion === 'todas' || e.gestion === espacial.gestion),
+        )
+        .map((e) => ({ id: e.id, lon: e.lon, lat: e.lat }))
 
       /*
-       * La clave no lleva el ambito a proposito: el mismo analisis del urbano
-       * sirve para la ciudad entera, para una plataforma y para un barrio.
-       *
-       * Si lleva, en cambio, la lista de equipamientos de partida. Con solo el
-       * tipo y la gestion, un filtro de uso o una busqueda por texto cambiarian
-       * los origenes sin cambiar la clave y se reutilizaria un analisis que ya
-       * no corresponde: la cifra saldria de unos equipamientos y la pantalla
-       * diria otros.
+       * Los proyectos de 2026 que de verdad crean alcance de este uso. Un
+       * adoquinado o una consultoria no entran: eso lo decide el script que
+       * trae la tabla, no esta pantalla.
        */
-      const clave = [
-        espacial.tipoEquipamiento,
-        espacial.gestion,
-        espacial.minutos,
-        origenes.map((e) => e.id).join(','),
-      ].join('|')
-      let guardado = analisisUrbano.current
-      if (!guardado || guardado.clave !== clave) {
+      const delPlan = (capasMun?.proyectos ?? [])
+        .filter((p) => p.aporta && p.uso === espacial.tipoEquipamiento)
+        .map((p) => ({ id: `proyecto:${p.item}`, lon: p.lon, lat: p.lat }))
+
+      /**
+       * El analisis del casco urbano para una lista de origenes, guardado.
+       *
+       * La clave no lleva el ambito a proposito —el mismo analisis sirve para
+       * la ciudad, para una plataforma y para un barrio— pero si lleva la lista
+       * de origenes: con solo el tipo y la gestion, un filtro de uso o una
+       * busqueda por texto cambiarian los origenes sin cambiar la clave y se
+       * reutilizaria un analisis que ya no corresponde.
+       */
+      const analizar = async (origenes: { id: string; lon: number; lat: number }[]) => {
+        const clave = [espacial.minutos, origenes.map((o) => o.id).join(',')].join('|')
+        const ya = analisisUrbano.current.get(clave)
+        if (ya) return ya
         const red = await iso.cargarRed()
-        if (!vivo) return
         const r = iso.calcularIsocrona(red, origenes, espacial.minutos)
         /*
          * La isocrona se calcula sobre las calles, pero se lee como superficie:
@@ -489,40 +494,68 @@ export default function App() {
          * mismo.
          */
         const campo = sup.campoDeTiempos(red, r, espacial.minutos)
-        if (!campo) {
-          if (vivo) setIsocrona(null)
-          return
-        }
-        guardado = { clave, red, iso: r, campo }
-        analisisUrbano.current = guardado
+        if (!campo) return null
+        const hecho = { red, iso: r, campo }
+        analisisUrbano.current.set(clave, hecho)
+        return hecho
       }
-      if (!vivo) return
 
-      const { red, iso: r } = guardado
-      // El recorte trabaja sobre una copia: el analisis del urbano se guarda
-      // entero para poder recortarlo otra vez por otro ambito.
-      const campo = { ...guardado.campo, minutos: Float32Array.from(guardado.campo.minutos) }
-      // Primero el recorte y despues todo lo demas: el contorno, las hectareas
-      // y los habitantes salen del mismo campo ya recortado y no pueden
-      // contradecirse entre si.
-      sup.recortarCampo(campo, recorte.piezas)
-      const bandas = sup.bandasDe(campo, tramos)
-      // Las calles tambien se recortan: si no, la columna de kilometros
-      // hablaria del urbano entero mientras las otras dos hablan del ambito.
-      const calles = sup.recortarCalles(red, r, campo)
-      const gente = sup.poblacionPorBanda(recorte.barrios, campo, tramos)
+      /** Recorta el analisis al ambito y saca de ahi todas las cifras. */
+      const medir = (g: { red: Red; iso: Isocrona; campo: Campo }) => {
+        // El recorte trabaja sobre una copia: el analisis del urbano se guarda
+        // entero para poder recortarlo otra vez por otro ambito.
+        const campo = { ...g.campo, minutos: Float32Array.from(g.campo.minutos) }
+        // Primero el recorte y despues todo lo demas: el contorno, las
+        // hectareas y los habitantes salen del mismo campo ya recortado y no
+        // pueden contradecirse entre si.
+        sup.recortarCampo(campo, recorte.piezas)
+        const bandas = sup.bandasDe(campo, tramos)
+        // Las calles tambien se recortan: si no, la columna de kilometros
+        // hablaria del urbano entero mientras las otras dos hablan del ambito.
+        const calles = sup.recortarCalles(g.red, g.iso, campo)
+        const gente = sup.poblacionPorBanda(recorte.barrios, campo, tramos)
+        return { bandas, calles, gente }
+      }
+
+      const base = await analizar(construidos)
+      if (!vivo || !base) {
+        if (vivo) setIsocrona(null)
+        return
+      }
+      const hoy = medir(base)
+
+      /*
+       * Lo construido y lo construido mas el plan se miden siempre los dos,
+       * aunque en pantalla se vea uno: la pregunta no es cuanto alcance habra,
+       * es **cuanto suma el plan**, y eso es una resta que necesita las dos
+       * cifras. Como las dos quedan guardadas, el interruptor no recalcula.
+       */
+      const conPlan = delPlan.length > 0 ? await analizar([...construidos, ...delPlan]) : null
       if (!vivo) return
+      const futuro = conPlan ? medir(conPlan) : null
+
+      const elegido = espacial.conProyectos && conPlan && futuro ? futuro : hoy
+      const fuente = espacial.conProyectos && conPlan ? conPlan : base
 
       setIsocrona({
-        red: red as unknown as { aristas: [number, number, number, number[][]][] },
-        alcanzables: calles.alcanzables,
+        red: fuente.red as unknown as { aristas: [number, number, number, number[][]][] },
+        alcanzables: elegido.calles.alcanzables,
         tramos,
-        metrosPorTramo: calles.metrosPorTramo,
-        bandas,
-        poblacion: gente.poblacion,
-        poblacionPorTramo: gente.porTramo,
-        origenes: r.origenes,
-        sueltos: r.sueltos,
+        metrosPorTramo: elegido.calles.metrosPorTramo,
+        bandas: elegido.bandas,
+        poblacion: elegido.gente.poblacion,
+        poblacionPorTramo: elegido.gente.porTramo,
+        origenes: fuente.iso.origenes,
+        sueltos: fuente.iso.sueltos,
+        proyectos: delPlan.length,
+        aporteHabitantes: futuro
+          ? (futuro.gente.porTramo.get(espacial.minutos) ?? 0) -
+            (hoy.gente.porTramo.get(espacial.minutos) ?? 0)
+          : null,
+        aporteHectareas: futuro
+          ? (futuro.bandas.find((b) => b.minutos === espacial.minutos)?.hectareas ?? 0) -
+            (hoy.bandas.find((b) => b.minutos === espacial.minutos)?.hectareas ?? 0)
+          : null,
       })
     })()
     return () => {
@@ -534,7 +567,9 @@ export default function App() {
     espacial.tipoEquipamiento,
     espacial.gestion,
     espacial.minutos,
+    espacial.conProyectos,
     equipUrbano,
+    capasMun,
     recorte,
   ])
 

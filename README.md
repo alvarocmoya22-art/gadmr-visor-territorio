@@ -400,6 +400,75 @@ Regenerar la red cuando cambien las calles de OSM:
 python scripts/red_peatonal.py
 ```
 
+### Los proyectos de 2026 y cuánto alcance suman
+
+El tablero de la Jefatura de Diseño de la Obra Pública
+(<https://gadmr-phdu.github.io/Proyectos/>) lee una tabla de Supabase con clave
+publicable. `scripts/proyectos_pac.py` lee esa misma tabla y deja una foto en
+`public/datos/proyectos.geojson`, así el visor sigue siendo estático y no
+depende de que ese servicio esté en pie. Se vuelve a correr cuando haya otra
+reforma presupuestaria.
+
+En el escenario de isócronas hay una casilla **«Sumar los proyectos de 2026»**.
+Se calculan siempre las dos versiones —lo construido y lo construido más el
+plan— porque la pregunta no es cuánto alcance habrá, es **cuánto suma el plan**,
+y eso es una resta que necesita las dos cifras. Las dos quedan guardadas, así
+que el interruptor no recalcula.
+
+#### Lo que cuesta trabajo no es traer los datos
+
+Traer 36 registros es trivial. Lo que decide el resultado son dos cosas:
+
+**Qué proyecto crea alcance y cuál no.** Vive en `CLASIFICACION`, a la vista y
+editable, con tres estados:
+
+| Escala | Qué es | ¿Entra? |
+|---|---|---|
+| `proximidad` | Equipamiento al que se va andando desde la casa | Sí |
+| `ciudad` | Dotación cantonal: cementerio general, centro de rescate animal, centro de privación de libertad | No |
+| `None` | Vialidad, redes, estudios, consultorías | No |
+
+Lo de escala `ciudad` es equipamiento y es inversión; lo que no tiene sentido es
+medirlo con una isócrona de plataforma, porque sirve al cantón entero y nadie va
+al cementerio andando desde su casa un martes. Lo que no esté en la tabla sale
+marcado para que alguien lo clasifique, en vez de colarse con un valor por
+omisión.
+
+**Que un proyecto puede estar en varios sitios.** El tablero guarda las
+coordenadas como texto libre y ahí aparecen tres cosas distintas: un par suelto;
+varios sitios rotulados —«PLUMA 759315.77» y debajo «LEÓN DORMIDO 758864.39»,
+porque una obra puede intervenir en dos plazas a la vez—; y los vértices de un
+trazado o un predio, sin rótulo. Cada sitio rotulado va como punto propio
+—medirlos como uno solo pondría la mitad de la obra donde no está— y un trazado
+se representa por su centro. Leyéndolo así, los proyectos sin ubicar pasan de
+ocho a uno.
+
+También se corrige sobre la marcha que la abscisa y la ordenada vengan cambiadas
+de columna, que pasa: en UTM 17S la ordenada pasa de nueve millones y la abscisa
+no, así que no hace falta creerse la etiqueta.
+
+#### Qué sale
+
+De los 36 proyectos, 16 puntos caen dentro de una plataforma y **8 crean alcance
+de equipamiento**. Doce de las dieciocho plataformas no reciben ninguno.
+
+En lo **recreativo** el urbano ya está al 98 % a diez minutos andando: los cuatro
+proyectos de ese uso suman **37 habitantes** en toda la ciudad. No es que estén
+mal hechos; es que esa necesidad ya estaba cubierta.
+
+En lo **cultural**, donde el urbano está al 64 %, los cuatro proyectos suman
+**8.328 habitantes y 130 ha**, y no repartidos por igual:
+
+| Plataforma | Hoy | Suma el plan | Queda en |
+|---|---|---|---|
+| Q | 1.726 hab · 19 % | +5.126 hab | 76 % |
+| H | 4.187 hab · 37 % | +1.767 hab | 53 % |
+| J | 15.944 hab · 80 % | +202 hab | 81 % |
+| G | 5.690 hab · 67 % | 0 | 67 % |
+
+Dos están donde hacían falta y dos donde ya había cobertura. Eso es lo que la
+resta permite decir, y lo que una lista de proyectos con su monto no dice.
+
 ### Altura y color responden preguntas distintas
 
 En «Barrios en 3D» la altura es **cuánta gente vive** y el color, **lo lejos que

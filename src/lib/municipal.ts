@@ -95,6 +95,44 @@ export interface Poblacion {
   plataformas: Record<string, { pob: number; viv: number }>
 }
 
+/**
+ * Un proyecto del tablero de la Jefatura de Diseno de la Obra Publica.
+ *
+ * Llega de `scripts/proyectos_pac.py`, que lee la misma tabla que sirve el
+ * tablero publico. `uso` y `tipologia` son los de la Tabla 3 del Codigo Urbano,
+ * de modo que un proyecto se puede medir con el mismo radio que un equipamiento
+ * ya construido; `aporta` dice si crea alcance nuevo o no. Un adoquinado, un
+ * colector o una consultoria son inversion real y no mueven la cobertura de un
+ * parque: esos llegan con `aporta` en falso y no entran en el analisis.
+ */
+export interface Proyecto {
+  id: string
+  item: number
+  nombre: string
+  categoria: string
+  parroquia: string
+  monto: number | null
+  estado: string
+  /** Uso de la Tabla 3, o null si el proyecto no es equipamiento. */
+  uso: string | null
+  tipologia: string | null
+  /**
+   * A que escala sirve: «proximidad» si es equipamiento al que se va andando,
+   * «ciudad» si es dotacion cantonal —el cementerio general, el centro de
+   * rescate animal— que sirve a todo el canton y que nadie usa a diario a pie,
+   * null si no es equipamiento. Solo lo de proximidad entra en la isocrona.
+   */
+  escala: string | null
+  /** Si crea alcance nuevo de equipamiento: `escala` de proximidad. */
+  aporta: boolean
+  /** Por que aporta o por que no, en una linea. */
+  nota: string
+  lon: number
+  lat: number
+  plataforma: string | null
+  barrio: string | null
+}
+
 export interface CapasMunicipales {
   plataformas: Plataforma[]
   barriosLista: Barrio[]
@@ -104,6 +142,8 @@ export interface CapasMunicipales {
   plataformasGeo: GeoJSON.FeatureCollection
   /** null si el archivo no esta; el visor sigue funcionando sin poblacion. */
   poblacion: Poblacion | null
+  /** Vacio si el archivo no esta: la capa de proyectos es opcional. */
+  proyectos: Proyecto[]
 }
 
 /**
@@ -300,14 +340,33 @@ async function traerPoblacion(): Promise<Poblacion | null> {
   }
 }
 
+/**
+ * Los proyectos, si estan.
+ *
+ * Opcional a proposito: el visor tiene que seguir abriendo aunque el archivo no
+ * se haya generado todavia o el tablero de origen se caiga.
+ */
+async function traerProyectos(): Promise<GeoJSON.FeatureCollection | null> {
+  try {
+    const resp = await fetch(`${import.meta.env.BASE_URL}datos/proyectos.geojson`, {
+      cache: 'no-cache',
+    })
+    return resp.ok ? ((await resp.json()) as GeoJSON.FeatureCollection) : null
+  } catch {
+    return null
+  }
+}
+
 export async function cargarCapas(): Promise<CapasMunicipales> {
-  const [plataformasGeo, parroquias, barrios, equipamientosGeo, poblacion] = await Promise.all([
-    traer('plataformas'),
-    traer('parroquias'),
-    traer('barrios'),
-    traer('equipamientos'),
-    traerPoblacion(),
-  ])
+  const [plataformasGeo, parroquias, barrios, equipamientosGeo, poblacion, proyectosGeo] =
+    await Promise.all([
+      traer('plataformas'),
+      traer('parroquias'),
+      traer('barrios'),
+      traer('equipamientos'),
+      traerPoblacion(),
+      traerProyectos(),
+    ])
 
   const plataformas = aPlataformas(plataformasGeo)
   nombrarBarrios(barrios)
@@ -349,6 +408,32 @@ export async function cargarCapas(): Promise<CapasMunicipales> {
     }
   })
 
+  const proyectos: Proyecto[] = (proyectosGeo?.features ?? []).map((f, i) => {
+    const p = f.properties ?? {}
+    const c = (f.geometry as GeoJSON.Point).coordinates
+    return {
+      id: `pr${i}`,
+      item: Number(p.item ?? 0),
+      nombre: String(p.proyecto ?? '').trim(),
+      categoria: String(p.categoria ?? ''),
+      parroquia: String(p.parroquia ?? ''),
+      monto: p.monto == null ? null : Number(p.monto),
+      estado: String(p.estado ?? ''),
+      uso: p.uso == null ? null : String(p.uso),
+      tipologia: p.tipologia == null ? null : String(p.tipologia),
+      escala: p.escala == null ? null : String(p.escala),
+      aporta: p.aporta === true,
+      nota: String(p.nota ?? ''),
+      lon: c[0],
+      lat: c[1],
+      // La plataforma y el barrio los calcula el script por geometria, pero se
+      // recalculan aqui para que no dependan de que el archivo este al dia con
+      // los limites que el visor tiene cargados.
+      plataforma: plataformaDe(c[0], c[1], plataformas),
+      barrio: barrioDe(c[0], c[1], barriosLista),
+    }
+  })
+
   return {
     plataformas,
     barriosLista,
@@ -357,6 +442,7 @@ export async function cargarCapas(): Promise<CapasMunicipales> {
     barrios,
     plataformasGeo,
     poblacion,
+    proyectos,
   }
 }
 

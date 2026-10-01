@@ -33,6 +33,8 @@ export interface EstadoEspacial {
   gestion: Gestion
   /** Dibujar además las calles alcanzables sobre la mancha. */
   verCalles: boolean
+  /** Sumar al alcance los proyectos de 2026 que crean equipamiento. */
+  conProyectos: boolean
 }
 
 export const ESPACIAL_INICIAL: EstadoEspacial = {
@@ -47,6 +49,7 @@ export const ESPACIAL_INICIAL: EstadoEspacial = {
   minutos: 10,
   gestion: 'todas',
   verCalles: false,
+  conProyectos: false,
 }
 
 /** Resumen que calcula `lib/deck/escenarios` y esta vista solo muestra. */
@@ -82,6 +85,9 @@ interface Props {
     poblacionPorTramo: Map<number, number>
     origenes: number
     sueltos: number
+    proyectos: number
+    aporteHabitantes: number | null
+    aporteHectareas: number | null
   } | null
   /** Resumen de la asignación; null mientras no toque. */
   flujos: ResumenFlujos | null
@@ -529,6 +535,22 @@ export default function PanelEspacial({
             Ver también las calles por donde se llega
           </label>
 
+          {/* El plan de 2026 se suma al alcance, no lo sustituye: la pregunta
+              es cuanto anade a lo que ya esta construido. */}
+          <label
+            className="flex items-center gap-2 text-[12px]"
+            style={{ color: isocrona && isocrona.proyectos === 0 ? 'var(--gr-tinta-3)' : 'var(--gr-tinta-2)' }}
+          >
+            <input
+              type="checkbox"
+              checked={estado.conProyectos}
+              disabled={!!isocrona && isocrona.proyectos === 0}
+              onChange={(e) => cambiar({ conProyectos: e.target.checked })}
+            />
+            Sumar los proyectos de 2026
+            {isocrona ? ` (${numero(isocrona.proyectos)})` : ''}
+          </label>
+
           {isocrona ? (
             <>
               <Cifras
@@ -559,6 +581,32 @@ export default function PanelEspacial({
                 Medido con todos los equipamientos del urbano —también los de fuera del ámbito, que
                 siguen sirviendo a quien vive dentro— y recortado después a {ambito}.
               </p>
+
+              {/* La resta es la respuesta: cuanto alcance anade el plan a lo que
+                  ya hay. Cero tambien es una respuesta, y de las utiles. */}
+              {isocrona.aporteHabitantes !== null && (
+                <p
+                  className="gr-nota"
+                  style={{
+                    borderColor: isocrona.aporteHabitantes > 0 ? 'var(--gr-ok)' : 'var(--gr-linea)',
+                  }}
+                >
+                  {isocrona.aporteHabitantes >= 1 ? (
+                    <>
+                      Los {numero(isocrona.proyectos)} proyectos de 2026 de este uso suman{' '}
+                      <strong>{numero(Math.round(isocrona.aporteHabitantes))} habitantes</strong> y{' '}
+                      {numero(Math.round(isocrona.aporteHectareas ?? 0))} ha al alcance de{' '}
+                      {numero(estado.minutos)} minutos en {ambito}.
+                    </>
+                  ) : (
+                    <>
+                      Los {numero(isocrona.proyectos)} proyectos de 2026 de este uso{' '}
+                      <strong>no suman alcance</strong> en {ambito}: caen donde ya se llegaba
+                      andando en {numero(estado.minutos)} minutos, o caen fuera.
+                    </>
+                  )}
+                </p>
+              )}
 
               <table className="gr-tabla">
                 <caption className="gr-eyebrow mb-1 text-left">Alcance por tramo</caption>
