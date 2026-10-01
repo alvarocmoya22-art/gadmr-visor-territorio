@@ -3,6 +3,7 @@ import maplibregl, { type ExpressionSpecification, type StyleSpecification } fro
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { VISTA_INICIAL } from '../config/riobamba'
 import { capaDe, capaRotulosDe, MAPAS_BASE, MAPA_BASE_INICIAL } from '../config/mapasBase'
+import { ICONOS_PROYECTO, imagenDeIcono, nombreIcono } from '../config/iconosProyecto'
 import { CATEGORIAS, paletaResuelta, POR_CLAVE, type ClaveCategoria } from '../lib/categorias'
 import { paletaUsos } from '../lib/usos'
 import { aGeoJSON, type Punto } from '../lib/overpass'
@@ -68,6 +69,8 @@ export interface CapasVisibles {
   equipamientos: boolean
   /** Volumen construido de OpenStreetMap, extruido. */
   edificios: boolean
+  /** Dónde van los proyectos del plan de 2026. */
+  proyectos: boolean
 }
 
 interface Props {
@@ -740,6 +743,90 @@ export default function Mapa({
         },
       })
 
+      /*
+       * ── Proyectos del plan de 2026.
+       *
+       * Rombo relleno, no anillo: el anillo ya es el inventario construido y
+       * confundir lo que existe con lo que esta previsto seria el peor error
+       * que puede cometer este mapa. Los que crean alcance van encendidos y
+       * los que no —vialidad, redes, estudios, dotacion cantonal— van
+       * apagados, porque siguen siendo inversion y merecen verse, pero no son
+       * lo mismo.
+       */
+      m.addSource('proyectos', { type: 'geojson', data: VACIO, promoteId: 'id' })
+      m.addLayer({
+        id: 'proyectos',
+        type: 'circle',
+        source: 'proyectos',
+        layout: { visibility: 'none' },
+        paint: {
+          'circle-radius': ['interpolate', ['linear'], ['zoom'], 11, 5, 14, 8, 18, 13],
+          'circle-color': [
+            'case',
+            ['get', 'aporta'],
+            raiz.getPropertyValue('--gr-ok').trim() || '#2f8f5b',
+            tinta3,
+          ],
+          'circle-opacity': 0.9,
+          'circle-stroke-width': 2,
+          'circle-stroke-color': raiz.getPropertyValue('--gr-superficie').trim() || '#ffffff',
+        },
+      })
+      /*
+       * Los iconos se registran una vez, en blanco: a dieciseis pixeles lo
+       * unico que se lee es la silueta, y un icono bicolor a ese tamano es una
+       * mancha. El color va en el disco de debajo.
+       */
+      /*
+       * Blanco literal y no un token del sistema: el icono va encima de un
+       * disco de color saturado, no sobre el fondo, asi que no debe cambiar
+       * con el tema. Con `--gr-superficie` saldria azul oscuro en tema oscuro
+       * y desapareceria sobre el disco gris.
+       */
+      for (const [clave, trazado] of Object.entries(ICONOS_PROYECTO)) {
+        const imagen = imagenDeIcono(trazado, '#ffffff')
+        if (imagen && !m.hasImage(nombreIcono(clave))) {
+          m.addImage(nombreIcono(clave), imagen, { pixelRatio: 2 })
+        }
+      }
+      m.addLayer({
+        id: 'proyectos-icono',
+        type: 'symbol',
+        source: 'proyectos',
+        layout: {
+          visibility: 'none',
+          'icon-image': ['concat', 'proyecto-', ['get', 'icono']],
+          // El icono ocupa algo menos que el disco para que quede un reborde
+          // del color, que es lo que se ve de lejos.
+          'icon-size': ['interpolate', ['linear'], ['zoom'], 11, 0.32, 14, 0.5, 18, 0.8],
+          'icon-allow-overlap': true,
+          'icon-ignore-placement': true,
+        },
+      })
+
+      m.addLayer({
+        id: 'proyectos-etiqueta',
+        type: 'symbol',
+        source: 'proyectos',
+        // Solo de cerca: con el mapa entero a la vista, cuarenta rotulos
+        // encima de los puntos tapan justo lo que se quiere mirar.
+        minzoom: 14,
+        layout: {
+          visibility: 'none',
+          'text-field': ['get', 'corto'],
+          'text-size': 11,
+          'text-offset': [0, 1.2],
+          'text-anchor': 'top',
+          'text-max-width': 12,
+          'text-allow-overlap': false,
+        },
+        paint: {
+          'text-color': raiz.getPropertyValue('--gr-tinta-1').trim() || '#e8eef4',
+          'text-halo-color': raiz.getPropertyValue('--gr-fondo').trim() || '#10151b',
+          'text-halo-width': 1.5,
+        },
+      })
+
       // ── Alcance de cada equipamiento. Va en linea y sin relleno: con
       // trescientos circulos superpuestos, el relleno se acumula y la mancha
       // acaba diciendo mas de los solapes que de la cobertura.
@@ -1013,6 +1100,36 @@ export default function Mapa({
     })
   }, [equipamientos, mapaListo])
 
+  /*
+   * Los proyectos del plan. El rotulo se recorta aqui y no en el estilo: un
+   * nombre de contratacion publica ocupa dos lineas de pantalla y en el mapa
+   * solo hace falta reconocerlo.
+   */
+  useEffect(() => {
+    cuandoListo((m) => {
+      const lista = capasMunicipales?.proyectos ?? []
+      const geo: GeoJSON.FeatureCollection = {
+        type: 'FeatureCollection',
+        features: lista.map((p) => ({
+          type: 'Feature',
+          geometry: { type: 'Point', coordinates: [p.lon, p.lat] },
+          properties: {
+            id: p.id,
+            nombre: p.nombre,
+            corto: p.nombre.length > 46 ? `${p.nombre.slice(0, 44).trimEnd()}…` : p.nombre,
+            uso: p.uso ?? '',
+            icono: p.icono,
+            aporta: p.aporta,
+            nota: p.nota,
+            monto: p.monto,
+            estado: p.estado,
+          },
+        })),
+      }
+      ;(m.getSource('proyectos') as maplibregl.GeoJSONSource | undefined)?.setData(geo)
+    })
+  }, [capasMunicipales, mapaListo])
+
   // Coropleta del déficit: se recalcula fuera y aquí solo se dibuja.
   useEffect(() => {
     cuandoListo((m) => {
@@ -1271,6 +1388,9 @@ export default function Mapa({
       poner('barrios-etiqueta', capas.barrios)
       poner('equipamientos', capas.equipamientos)
       poner('edificios-3d', capas.edificios)
+      poner('proyectos', capas.proyectos)
+      poner('proyectos-icono', capas.proyectos)
+      poner('proyectos-etiqueta', capas.proyectos)
       poner('calor-registros', mapaCalor === 'registros')
       poner('calor-pendientes', mapaCalor === 'pendientes')
       poner('calor-equipamientos', mapaCalor === 'equipamientos')

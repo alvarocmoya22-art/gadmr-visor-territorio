@@ -444,6 +444,36 @@ plan— porque la pregunta no es cuánto alcance habrá, es **cuánto suma el pl
 y eso es una resta que necesita las dos cifras. Las dos quedan guardadas, así
 que el interruptor no recalcula.
 
+También están en el mapa, en **Capas del mapa → Proyectos 2026**. El punto lleva
+dos lecturas y por eso usa dos canales:
+
+- **El color** dice si el proyecto crea alcance de equipamiento. Los que sí van
+  encendidos; los que no —vialidad, redes, estudios, dotación cantonal— van
+  apagados: siguen siendo inversión y merecen verse, pero no son lo mismo.
+- **El icono** dice de qué obra se trata: árbol para parque, frontón para
+  cultural, balón para cancha o estadio, calzada para vialidad, gota para
+  alcantarillado, lápida para el cementerio, edificio para la dotación
+  cantonal, documento para lo que todavía es un estudio.
+
+Van rellenos y no en anillo porque el anillo ya es el inventario construido, y
+confundir lo que existe con lo que está previsto sería el peor error que puede
+cometer este mapa. El rótulo aparece a partir del zoom 14.
+
+Los iconos son trazados SVG de 24×24 que viven en `src/config/iconosProyecto.ts`
+y se dibujan sobre un lienzo con `Path2D` para dárselos a MapLibre con
+`addImage`. Así el visor sigue siendo un solo paquete: no hay sprites que servir
+ni versionar. Van en blanco sobre el disco de color —a dieciséis píxeles lo
+único que se lee es la silueta—, y ese blanco es literal y no un token del
+sistema, porque el icono se apoya en el disco y no en el fondo: con el token de
+superficie saldría azul oscuro en tema oscuro y desaparecería sobre el disco
+gris.
+
+Cuando el proyecto está clasificado, el icono sale de su uso, que es dato. En
+los que no lo están sale de una regla sobre el nombre, y eso es una pista
+visual, no un hecho: de ahí no sale ninguna cifra. Equivocar el icono de un
+adoquinado rural despista un segundo; equivocar `aporta` falsea un análisis, y
+por eso esa decisión sigue siendo explícita y a mano.
+
 #### Lo que cuesta trabajo no es traer los datos
 
 Traer 36 registros es trivial. Lo que decide el resultado son dos cosas:

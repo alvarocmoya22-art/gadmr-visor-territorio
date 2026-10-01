@@ -34,6 +34,7 @@ const CAPAS: { clave: keyof CapasVisibles; rotulo: string }[] = [
   { clave: 'barrios', rotulo: 'Barrios' },
   { clave: 'equipamientos', rotulo: 'Equipamientos del GADM' },
   { clave: 'edificios', rotulo: 'Edificación en 3D' },
+  { clave: 'proyectos', rotulo: 'Proyectos 2026' },
   { clave: 'mapillary', rotulo: 'Fotos de calle (Mapillary)' },
 ]
 

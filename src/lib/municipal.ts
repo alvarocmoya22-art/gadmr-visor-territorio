@@ -125,6 +125,8 @@ export interface Proyecto {
   escala: string | null
   /** Si crea alcance nuevo de equipamiento: `escala` de proximidad. */
   aporta: boolean
+  /** Que obra es, para el icono del mapa: parque, via, estudio, etc. */
+  icono: string
   /** Por que aporta o por que no, en una linea. */
   nota: string
   lon: number
@@ -423,6 +425,7 @@ export async function cargarCapas(): Promise<CapasMunicipales> {
       tipologia: p.tipologia == null ? null : String(p.tipologia),
       escala: p.escala == null ? null : String(p.escala),
       aporta: p.aporta === true,
+      icono: String(p.icono ?? 'otro'),
       nota: String(p.nota ?? ''),
       lon: c[0],
       lat: c[1],

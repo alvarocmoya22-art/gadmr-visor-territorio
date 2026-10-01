@@ -76,6 +76,54 @@ CLASIFICACION = {
     38: (None, None, None, "Estudio: despiece de un monumento"),
 }
 
+#: Icono de cada proyecto en el mapa.
+#:
+#: El color del punto ya dice si el proyecto crea alcance o no; el icono dice
+#: **de que obra se trata**, que es la otra pregunta que uno se hace al ver un
+#: punto en el mapa. Son dos lecturas distintas y por eso van en dos canales
+#: distintos.
+#:
+#: Cuando el proyecto esta clasificado, el icono sale de su uso, que es dato. En
+#: los que no lo estan sale de una regla sobre el nombre, y eso es una pista
+#: visual, no un hecho: por eso de aqui no sale ninguna cifra. Equivocar el
+#: icono de un adoquinado rural despista un segundo; equivocar `aporta` falsea
+#: un analisis, y por eso esa decision sigue siendo explicita y a mano.
+PALABRAS_ICONO = [
+    (("adoquinado", "asfaltado", "vial", "bordillo", "puente", "rehabilitacion urbana", "calle"), "via"),
+    (("alcantarillado", "colector", "drenaje", "agua"), "red"),
+    (("consultoria", "estudio", "estudios", "despiece", "disenos"), "estudio"),
+    (("cancha", "estadio", "graderio", "coliseo", "cubierta", "vestidores", "cerramiento"), "deporte"),
+    (("cementerio", "boveda"), "funerario"),
+    (("mercado", "centro turistico", "bateria"), "otro"),
+]
+
+
+def sin_tildes(t):
+    import unicodedata
+
+    return "".join(
+        c for c in unicodedata.normalize("NFD", t.lower()) if unicodedata.category(c) != "Mn"
+    )
+
+
+def icono_de(nombre, uso, escala):
+    texto = sin_tildes(nombre)
+    # El cementerio antes que nada: es dotacion de ciudad y ademas tiene icono
+    # propio, y con el orden al reves saldria como un edificio cualquiera.
+    if "cementerio" in texto or "boveda" in texto:
+        return "funerario"
+    if escala == "ciudad":
+        return "dotacion"
+    if uso == "Cultural":
+        return "cultura"
+    if uso == "Recreativo y Deporte":
+        return "deporte" if any(p in texto for p in ("cancha", "estadio", "graderio", "coliseo")) else "parque"
+    for palabras, icono in PALABRAS_ICONO:
+        if any(p in texto for p in palabras):
+            return icono
+    return "otro"
+
+
 LOG = []
 
 
@@ -174,6 +222,7 @@ for p in filas:
         "uso": uso,
         "tipologia": tipologia,
         "escala": escala,
+        "icono": icono_de((p.get("proyecto") or ""), uso, escala),
         # Solo lo de proximidad suma alcance peatonal.
         "aporta": escala == "proximidad",
         "nota": nota,
