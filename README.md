@@ -219,6 +219,35 @@ Antes de publicar el visor fuera de la red municipal hay que revisar la polític
 de uso de cada proveedor: la de OpenStreetMap, en particular, no admite tráfico
 alto.
 
+### Edificación en 3D
+
+Se enciende en **Capas del mapa → Edificación en 3D**, e inclina la cámara al
+hacerlo: un modelo en tres dimensiones visto en planta es un mapa de manchas.
+
+Son **6.039 edificios** de OpenStreetMap dentro de las 18 plataformas, que
+extrae `scripts/edificios_osm.py`. La altura sale de `height` cuando está y si
+no de los pisos por tres metros. Lo que decidió que valiera la pena es la
+proporción: **el 83 % trae altura o pisos declarados**, así que el volumen se
+parece a Riobamba y no es un bloque plano de seis metros repetido. Lo que no
+tiene dato va raso y en otro tono, para que se vea que es huella sin volumen y
+no un edificio de una planta.
+
+Pesa 1,5 MB y **se descarga la primera vez que alguien enciende la capa**, no al
+abrir el visor, igual que la red peatonal.
+
+**Descargar y poner los datos van en dos efectos separados**, y no por gusto: el
+mapa puede no tener el estilo listo cuando la descarga termina —en una pestaña
+de fondo el navegador no pinta, y sin pintar MapLibre no acaba de cargar—, y
+aplicarlos ahí mismo los perdía sin ruido. La capa quedaba encendida y vacía,
+que parece un fallo de datos sin serlo.
+
+Otra que costó encontrar: **`fitBounds` endereza la cámara**. Reencuadrar un
+ámbito dejaba la edificación en planta cada vez, así que las tres llamadas
+pasan ahora la inclinación explícita. Y al abrir el visor las dos cosas se
+disparan a la vez, de modo que leer el ángulo a mitad de la animación lo
+congelaba en cero: con la capa encendida se toma la inclinación que le toca, no
+la que haya en ese instante.
+
 ### Buscador de calles
 
 Escribir el nombre de una calle dice **por qué plataformas pasa**, encuadra el

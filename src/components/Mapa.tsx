@@ -66,6 +66,8 @@ export interface CapasVisibles {
   parroquias: boolean
   barrios: boolean
   equipamientos: boolean
+  /** Volumen construido de OpenStreetMap, extruido. */
+  edificios: boolean
 }
 
 interface Props {
@@ -219,6 +221,14 @@ const ESCALA_COBERTURA = [
 
 /** Color de la capa de fotografia de calle; en la leyenda va rotulada. */
 const COLOR_MAPILLARY = '#7f8c14'
+
+/**
+ * Inclinacion de la camara con la edificacion encendida.
+ *
+ * Un modelo en tres dimensiones visto en planta es un mapa de manchas: sin
+ * inclinar no se ve lo unico que esa capa aporta.
+ */
+const PITCH_EDIFICIOS = 55
 
 /**
  * Se construye uno nuevo por mapa a proposito: MapLibre consume el objeto de
@@ -437,6 +447,18 @@ export default function Mapa({
       },
     })
     mapa.current = m
+    /*
+     * Asa del mapa para la consola, solo en desarrollo. Vite la elimina del
+     * paquete publicado.
+     *
+     * No es un lujo: en React 18 en adelante el componente se monta dos veces
+     * en desarrollo, asi que llega a haber dos mapas y uno esta muerto. Sin
+     * una referencia explicita, depurar una capa consiste en adivinar cual de
+     * los dos se esta mirando, que es justo lo que paso con la edificacion.
+     */
+    if (import.meta.env.DEV) {
+      ;(window as unknown as { mapaVisor?: maplibregl.Map }).mapaVisor = m
+    }
     m.on('error', (e) => {
       console.error('[mapa]', e.error?.message ?? e)
     })
@@ -448,6 +470,50 @@ export default function Mapa({
       const azul = raiz.getPropertyValue('--gr-info').trim()
       const tinta3 = raiz.getPropertyValue('--gr-tinta-3').trim()
       const limiteBarrio = raiz.getPropertyValue('--gr-limite-barrio').trim()
+
+      /*
+       * ── Edificacion en tres dimensiones.
+       *
+       * Va la primera de todas, por debajo incluso de la coropleta: es el
+       * suelo construido sobre el que ocurre lo demas, no una capa de analisis.
+       * Arranca vacia y sin descargar nada; el GeoJSON pesa megas y solo se
+       * pide cuando alguien enciende la capa.
+       *
+       * La altura sale de OpenStreetMap: `height` cuando esta, y si no los
+       * pisos por tres metros. El 83 % del area urbana la trae, que es lo que
+       * hace que esto se parezca a Riobamba y no a un bloque plano repetido.
+       */
+      m.addSource('edificios', { type: 'geojson', data: VACIO })
+      m.addLayer({
+        id: 'edificios-3d',
+        type: 'fill-extrusion',
+        source: 'edificios',
+        layout: { visibility: 'none' },
+        paint: {
+          /*
+           * Mas alto, mas claro. Lo que no tiene dato va raso y en un tono
+           * aparte, para que se vea que es huella sin volumen y no un edificio
+           * de una planta: son dos cosas distintas y el mapa no debe
+           * confundirlas.
+           */
+          'fill-extrusion-color': [
+            'case',
+            ['!', ['get', 'medido']],
+            tinta3,
+            [
+              'interpolate',
+              ['linear'],
+              ['get', 'altura'],
+              3, raiz.getPropertyValue('--gr-s1').trim() || '#5b7d95',
+              12, raiz.getPropertyValue('--gr-s2').trim() || '#7fa8c4',
+              30, raiz.getPropertyValue('--gr-s3').trim() || '#b3cfe7',
+            ],
+          ],
+          'fill-extrusion-height': ['get', 'altura'],
+          'fill-extrusion-base': 0,
+          'fill-extrusion-opacity': 0.85,
+        },
+      })
 
       // ── Déficit de equipamiento por barrio. Se declara la primera para
       // que quede por debajo de los límites y de los puntos: es un fondo que
@@ -976,11 +1042,16 @@ export default function Mapa({
       if (overlay.current) {
         m.removeControl(overlay.current as unknown as maplibregl.IControl)
         overlay.current = null
-        if (m.getPitch() !== 0) m.easeTo({ pitch: 0, duration: 400 })
+        // La edificacion tambien vive de la inclinacion: si esta encendida,
+        // enderezar el mapa al salir del escenario la dejaria en planta.
+        if (m.getPitch() !== 0 && !capas.edificios) m.easeTo({ pitch: 0, duration: 400 })
       }
       return
     }
 
+    // `capas` pasa a ser el modulo de deck dentro de este ambito, asi que el
+    // prop del mismo nombre se lee aqui fuera.
+    const hayEdificacion = capas.edificios
     void (async () => {
       const [{ MapboxOverlay }, capas] = await Promise.all([
         import('@deck.gl/mapbox'),
@@ -1065,13 +1136,15 @@ export default function Mapa({
         const zoom = m.getZoom()
         m.easeTo({ pitch: PITCH_3D, zoom: zoom > 15 ? 13.5 : zoom, duration: 600 })
       }
-      if (!quiere3D && m.getPitch() > 10) m.easeTo({ pitch: 0, duration: 400 })
+      if (!quiere3D && !hayEdificacion && m.getPitch() > 10) {
+        m.easeTo({ pitch: 0, duration: 400 })
+      }
     })()
 
     return () => {
       vivo = false
     }
-  }, [espacial, puntos, equipamientos, mapaListo])
+  }, [espacial, puntos, equipamientos, capas.edificios, mapaListo])
 
   /*
    * Que tiñe los anillos del inventario. El cotejo dice cuanto esta verificado
@@ -1112,6 +1185,70 @@ export default function Mapa({
     })
   }, [cruce, mapaListo])
 
+  /*
+   * La edificacion se descarga la primera vez que alguien la enciende, no al
+   * abrir el visor: es megabyte y medio que no tiene por que pagar quien no la
+   * va a mirar. Despues se queda en la fuente y encenderla es instantaneo.
+   *
+   * Al encenderla tambien se inclina la camara. Un modelo en tres dimensiones
+   * visto en planta es un mapa de manchas: sin inclinar no se ve lo unico que
+   * esta capa aporta.
+   */
+  /*
+   * La edificacion se descarga la primera vez que alguien la enciende, no al
+   * abrir el visor: es megabyte y medio que no tiene por que pagar quien no la
+   * va a mirar.
+   *
+   * Descargar y poner van en dos efectos distintos a proposito. El mapa puede
+   * no tener el estilo listo cuando la descarga termina —en una pestana de
+   * fondo el navegador no pinta, y sin pintar MapLibre no acaba de cargar—, y
+   * si se intentara poner los datos ahi mismo se perderian sin ruido: la capa
+   * quedaria encendida y vacia, que es justo lo que parece un fallo de datos
+   * sin serlo.
+   */
+  const edificiosGeo = useRef<GeoJSON.FeatureCollection | null>(null)
+  const [edificiosListos, setEdificiosListos] = useState(false)
+
+  useEffect(() => {
+    if (!capas.edificios || edificiosGeo.current) return
+    let vivo = true
+    void (async () => {
+      try {
+        const resp = await fetch(`${import.meta.env.BASE_URL}datos/edificios.geojson`, {
+          cache: 'force-cache',
+        })
+        if (!resp.ok || !vivo) return
+        edificiosGeo.current = (await resp.json()) as GeoJSON.FeatureCollection
+        if (vivo) setEdificiosListos(true)
+      } catch {
+        // Sin edificacion el visor sigue entero; no hay nada que avisar.
+      }
+    })()
+    return () => {
+      vivo = false
+    }
+  }, [capas.edificios])
+
+  useEffect(() => {
+    if (!edificiosListos || !edificiosGeo.current) return
+    cuandoListo((m) => {
+      const fuente = m.getSource('edificios') as maplibregl.GeoJSONSource | undefined
+      if (fuente && edificiosGeo.current) fuente.setData(edificiosGeo.current)
+    })
+  }, [edificiosListos, mapaListo])
+
+  /*
+   * Al encender la capa se inclina la camara. Un modelo en tres dimensiones
+   * visto en planta es un mapa de manchas: sin inclinar no se ve lo unico que
+   * esta capa aporta.
+   */
+  useEffect(() => {
+    if (!capas.edificios) return
+    cuandoListo((m) => {
+      if (m.getPitch() < 20) m.easeTo({ pitch: PITCH_EDIFICIOS, duration: 700 })
+    })
+  }, [capas.edificios, mapaListo])
+
   // Visibilidad de capas
   useEffect(() => {
     cuandoListo((m) => {
@@ -1133,6 +1270,7 @@ export default function Mapa({
       poner('barrios-linea', capas.barrios)
       poner('barrios-etiqueta', capas.barrios)
       poner('equipamientos', capas.equipamientos)
+      poner('edificios-3d', capas.edificios)
       poner('calor-registros', mapaCalor === 'registros')
       poner('calor-pendientes', mapaCalor === 'pendientes')
       poner('calor-equipamientos', mapaCalor === 'equipamientos')
@@ -1205,13 +1343,24 @@ export default function Mapa({
 
       const caja = cajaDelAmbito(plataformaActiva, capasMunicipales)
       if (caja) {
+        /*
+         * `pitch` explicito: sin el, `fitBounds` endereza la camara, y
+         * reencuadrar un ambito dejaria la edificacion en planta cada vez.
+         * Cambiar de ambito mueve el encuadre, no el punto de vista.
+         *
+         * Con la edificacion encendida se toma la inclinacion que le toca y no
+         * la que haya en ese instante: las dos cosas se disparan a la vez al
+         * abrir el visor, y leer un angulo a mitad de la animacion lo congela
+         * en el valor de salida.
+         */
         m.fitBounds(caja, {
           padding: 40,
+          pitch: capas.edificios ? Math.max(m.getPitch(), PITCH_EDIFICIOS) : m.getPitch(),
           duration: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 700,
         })
       }
     })
-  }, [plataformaActiva, capasMunicipales, mapaListo])
+  }, [plataformaActiva, capasMunicipales, capas.edificios, mapaListo])
 
   /**
    * Calle buscada: se encuadra su envolvente y se marca su punto medio. No se
@@ -1230,6 +1379,7 @@ export default function Mapa({
     m.fitBounds([o, s, e, n], {
       padding: 60,
       maxZoom: 17,
+      pitch: m.getPitch(),
       duration: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 700,
     })
     if (!marcaCalle.current) {
@@ -1257,6 +1407,7 @@ export default function Mapa({
       if (b) {
         m.fitBounds([b.caja[0], b.caja[1], b.caja[2], b.caja[3]], {
           padding: 50,
+          pitch: m.getPitch(),
           duration: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 700,
         })
       }
