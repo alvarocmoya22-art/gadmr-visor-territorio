@@ -33,6 +33,13 @@
   --gr-s6: #0090ae;
   --gr-s7: #7f8c14;
   --gr-s8: #b0479c;
+  /* Series 9 a 12: solo las usa el inventario del GADM, que tiene doce usos
+     y las ocho primeras no alcanzan. Se eligen alejadas de las anteriores en
+     tono y en luminosidad, que es lo que permite separarlas de un vistazo. */
+  --gr-s9: #8a6d3b;
+  --gr-s10: #52708c;
+  --gr-s11: #a8443a;
+  --gr-s12: #3f7d6e;
   --gr-s-otros: #8496a4;
 
   /* Limite de barrio: color propio, fuera de las series tematicas, para que
@@ -65,6 +72,10 @@
     --gr-s6: #1fa5c2;
     --gr-s7: #8e9d22;
     --gr-s8: #c25cae;
+    --gr-s9: #b08c52;
+    --gr-s10: #7b98b5;
+    --gr-s11: #d06a5e;
+    --gr-s12: #56a091;
   }
 }
 
@@ -90,6 +101,10 @@
   --gr-s6: #1fa5c2;
   --gr-s7: #8e9d22;
   --gr-s8: #c25cae;
+  --gr-s9: #b08c52;
+  --gr-s10: #7b98b5;
+  --gr-s11: #d06a5e;
+  --gr-s12: #56a091;
 }
 
 html,

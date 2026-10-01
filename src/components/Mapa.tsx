@@ -2,8 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import maplibregl, { type ExpressionSpecification, type StyleSpecification } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { VISTA_INICIAL } from '../config/riobamba'
-import { capaDe, MAPAS_BASE, MAPA_BASE_INICIAL } from '../config/mapasBase'
+import { capaDe, capaRotulosDe, MAPAS_BASE, MAPA_BASE_INICIAL } from '../config/mapasBase'
 import { CATEGORIAS, paletaResuelta, POR_CLAVE, type ClaveCategoria } from '../lib/categorias'
+import { paletaUsos } from '../lib/usos'
 import { aGeoJSON, type Punto } from '../lib/overpass'
 import {
   aGeoJSONEquipamientos,
@@ -35,6 +36,15 @@ export interface Espacial {
   altura: AlturaBarrio
   colorBarrio: ColorBarrio
   barrios: Barrio[]
+  /** Isócrona ya resuelta; null mientras se calcula o si no toca. */
+  isocrona: {
+    red: { aristas: [number, number, number, number[][]][] }
+    alcanzables: { arista: number; minutos: number }[]
+    tramos: number[]
+    bandas: { minutos: number; piezas: [number, number][][][] }[]
+  } | null
+  /** Dibujar tambien las calles alcanzables encima de la mancha. */
+  verCalles: boolean
 }
 
 /** Qué densidad se dibuja como mapa de calor. */
@@ -90,6 +100,8 @@ interface Props {
   cruce: CruceMapa | null
   /** Escenario de visualización avanzada; null mientras no se abre la pestaña. */
   espacial: Espacial | null
+  /** Qué tiñe los anillos del inventario: el cotejo con OSM o el uso. */
+  colorEquip: 'cotejo' | 'uso'
   /** Pinchar un barrio de la coropleta lo pone en el filtro. */
   onElegirBarrio: (nombre: string) => void
   /** Calle buscada: el mapa la encuadra y la marca. */
@@ -220,26 +232,44 @@ function crearEstiloBase(): StyleSpecification {
     // MapLibre; si algun dia dejaran de servirse, las etiquetas de barrio
     // desaparecen pero el resto del mapa sigue igual.
     glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
-    // Los cuatro mapas base se declaran juntos y solo se alterna su
+    // Todos los mapas base se declaran juntos y solo se alterna su
     // visibilidad: cambiar de estilo obligaria a rehacer todas las capas.
+    // Los que sirven los rotulos aparte anaden una segunda capa encima.
     sources: Object.fromEntries(
-      MAPAS_BASE.map((b) => [
-        capaDe(b.clave),
-        {
+      MAPAS_BASE.flatMap((b) => {
+        const fuente = {
           type: 'raster' as const,
-          tiles: b.teselas,
           tileSize: 256,
           maxzoom: b.maxzoom,
           attribution: `${b.atribucion} · límites y equipamientos: GADM Riobamba`,
-        },
-      ]),
+        }
+        const pares: [string, typeof fuente & { tiles: string[] }][] = [
+          [capaDe(b.clave), { ...fuente, tiles: b.teselas }],
+        ]
+        if (b.rotulos) pares.push([capaRotulosDe(b.clave), { ...fuente, tiles: b.rotulos }])
+        return pares
+      }),
     ),
-    layers: MAPAS_BASE.map((b) => ({
-      id: capaDe(b.clave),
-      type: 'raster' as const,
-      source: capaDe(b.clave),
-      layout: { visibility: b.clave === MAPA_BASE_INICIAL ? ('visible' as const) : ('none' as const) },
-    })),
+    layers: MAPAS_BASE.flatMap((b) => {
+      const visibility = b.clave === MAPA_BASE_INICIAL ? ('visible' as const) : ('none' as const)
+      const capas = [
+        {
+          id: capaDe(b.clave),
+          type: 'raster' as const,
+          source: capaDe(b.clave),
+          layout: { visibility },
+        },
+      ]
+      if (b.rotulos) {
+        capas.push({
+          id: capaRotulosDe(b.clave),
+          type: 'raster' as const,
+          source: capaRotulosDe(b.clave),
+          layout: { visibility },
+        })
+      }
+      return capas
+    }),
   }
 }
 
@@ -265,6 +295,19 @@ function expresionColor(): ExpressionSpecification {
   const paleta = paletaResuelta()
   const pares = CATEGORIAS.flatMap((c) => [c.clave, paleta[c.clave]])
   return ['match', ['get', 'categoria'], ...pares, paleta.otros] as unknown as ExpressionSpecification
+}
+
+/** Color del equipamiento segun su uso; la paleta ampliada del sistema. */
+function expresionUso(): ExpressionSpecification {
+  const paleta = paletaUsos()
+  const pares = Object.entries(paleta).flat()
+  const raiz = getComputedStyle(document.documentElement)
+  return [
+    'match',
+    ['get', 'tipo'],
+    ...pares,
+    raiz.getPropertyValue('--gr-s-otros').trim() || '#8496a4',
+  ] as unknown as ExpressionSpecification
 }
 
 /** Los colores semánticos marcan estado, nunca categoría. */
@@ -354,6 +397,7 @@ export default function Mapa({
   alcance,
   cruce,
   espacial,
+  colorEquip,
   onElegirBarrio,
 }: Props) {
   const contenedor = useRef<HTMLDivElement>(null)
@@ -836,9 +880,9 @@ export default function Mapa({
   useEffect(() => {
     cuandoListo((m) => {
       for (const b of MAPAS_BASE) {
-        const capa = capaDe(b.clave)
-        if (m.getLayer(capa)) {
-          m.setLayoutProperty(capa, 'visibility', b.clave === mapaBase ? 'visible' : 'none')
+        const ver = b.clave === mapaBase ? 'visible' : 'none'
+        for (const capa of [capaDe(b.clave), capaRotulosDe(b.clave)]) {
+          if (m.getLayer(capa)) m.setLayoutProperty(capa, 'visibility', ver)
         }
       }
     })
@@ -958,6 +1002,23 @@ export default function Mapa({
                   espacial.extruido,
                 ),
               ]
+            : espacial.escenario === 'isocronas'
+              ? espacial.isocrona
+                ? [
+                    // La mancha primero y las calles encima: al reves el
+                    // relleno taparia justo la red que lo explica.
+                    capas.capaBandas(espacial.isocrona.bandas, espacial.isocrona.tramos),
+                    ...(espacial.verCalles
+                      ? [
+                          capas.capaIsocronas(
+                            espacial.isocrona.red,
+                            espacial.isocrona.alcanzables,
+                            espacial.isocrona.tramos,
+                          ),
+                        ]
+                      : []),
+                  ]
+                : []
             : espacial.escenario === 'barrios'
               ? [
                   capas.capaBarrios(
@@ -1011,6 +1072,23 @@ export default function Mapa({
       vivo = false
     }
   }, [espacial, puntos, equipamientos, mapaListo])
+
+  /*
+   * Que tiñe los anillos del inventario. El cotejo dice cuanto esta verificado
+   * contra OSM; el uso convierte la capa en una leyenda de los doce usos del
+   * Codigo Urbano. La forma —anillo hueco— no cambia nunca, porque es lo que
+   * distingue el inventario de los puntos de OSM.
+   */
+  useEffect(() => {
+    cuandoListo((m) => {
+      if (!m.getLayer('equipamientos')) return
+      m.setPaintProperty(
+        'equipamientos',
+        'circle-stroke-color',
+        colorEquip === 'uso' ? expresionUso() : colorEstadoCotejo(),
+      )
+    })
+  }, [colorEquip, mapaListo])
 
   // Cobertura y alcance: se calculan fuera y aquí solo se dibujan.
   useEffect(() => {

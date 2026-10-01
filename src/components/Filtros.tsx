@@ -3,6 +3,7 @@ import { numero } from '../lib/format'
 import type { Filtros as FiltrosT, Resumen } from '../hooks/usePuntos'
 import type { CapasVisibles, MapaCalor } from './Mapa'
 import { URBANO, type Barrio, type Plataforma } from '../lib/municipal'
+import { colorUso } from '../lib/usos'
 import { MAPAS_BASE } from '../config/mapasBase'
 import { hayToken as hayTokenMapillary } from '../lib/mapillary'
 
@@ -17,6 +18,11 @@ interface Props {
   onMapaBase: (clave: string) => void
   mapaCalor: MapaCalor
   onMapaCalor: (m: MapaCalor) => void
+  /** Usos del inventario en el ambito, con su cuenta. */
+  usosEquip: { tipo: string; n: number }[]
+  /** Que tiñe los anillos del inventario. */
+  colorEquip: 'cotejo' | 'uso'
+  onColorEquip: (c: 'cotejo' | 'uso') => void
   onCambio: (f: FiltrosT) => void
   onCapas: (c: CapasVisibles) => void
 }
@@ -44,6 +50,9 @@ export default function Filtros({
   onMapaBase,
   mapaCalor,
   onMapaCalor,
+  usosEquip,
+  colorEquip,
+  onColorEquip,
   onCambio,
   onCapas,
 }: Props) {
@@ -286,6 +295,87 @@ export default function Filtros({
             onClick={() => onCambio({ ...filtros, categorias: new Set() })}
           >
             Ver todas las capas
+          </button>
+        )}
+      </div>
+
+      {/* Segunda leyenda, y separada a proposito: el inventario del GADM usa
+          otra taxonomia que OpenStreetMap. De las nueve categorias de OSM y los
+          doce usos de aqui, solo Educacion y Salud significan lo mismo, asi que
+          juntarlas en una lista invitaria a sumar lo que no se puede sumar. */}
+      <div>
+        <p className="gr-eyebrow mb-1.5">
+          Equipamientos del GADM por uso
+          {filtros.plataforma === URBANO
+            ? ' · Riobamba urbano'
+            : filtros.plataforma
+              ? ` · plataforma ${filtros.plataforma}`
+              : ''}
+        </p>
+        <p className="mb-1.5 text-[11px]" style={{ color: 'var(--gr-tinta-3)' }}>
+          Inventario municipal, otra fuente distinta de la de arriba. Pulse uno para filtrar.
+        </p>
+
+        <label className="mb-1.5 block text-[11px]" style={{ color: 'var(--gr-tinta-3)' }}>
+          Colorear los anillos por
+          <select
+            value={colorEquip}
+            onChange={(e) => onColorEquip(e.target.value as 'cotejo' | 'uso')}
+            className="mt-0.5 w-full rounded border px-2 py-1.5 text-[13px]"
+            style={campo}
+          >
+            <option value="cotejo">Estado del cotejo con OSM</option>
+            <option value="uso">Uso del equipamiento</option>
+          </select>
+        </label>
+
+        <ul className="space-y-0.5">
+          {usosEquip.map((u) => {
+            const activo = filtros.usos.size === 0 || filtros.usos.has(u.tipo)
+            return (
+              <li key={u.tipo}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const usos = new Set(filtros.usos)
+                    if (usos.has(u.tipo)) usos.delete(u.tipo)
+                    else usos.add(u.tipo)
+                    onCambio({ ...filtros, usos })
+                  }}
+                  aria-pressed={filtros.usos.has(u.tipo)}
+                  className="flex w-full items-center gap-2 rounded px-1 py-1 text-left text-[13px] hover:bg-black/5"
+                  style={{ opacity: activo ? 1 : 0.4 }}
+                >
+                  {/* Anillo hueco, como en el mapa: la forma distingue la
+                      fuente y el color, el uso. */}
+                  <span
+                    aria-hidden
+                    className="h-3 w-3 shrink-0 rounded-full"
+                    style={{
+                      border: `2px solid ${
+                        colorEquip === 'uso' ? colorUso(u.tipo) : 'var(--gr-tinta-3)'
+                      }`,
+                    }}
+                  />
+                  <span className="flex-1 truncate" style={{ color: 'var(--gr-tinta-2)' }}>
+                    {u.tipo}
+                  </span>
+                  <span className="gr-num text-[12px]" style={{ color: 'var(--gr-tinta-3)' }}>
+                    {numero(u.n)}
+                  </span>
+                </button>
+              </li>
+            )
+          })}
+        </ul>
+        {filtros.usos.size > 0 && (
+          <button
+            type="button"
+            className="mt-1 text-[12px] underline"
+            style={{ color: 'var(--gr-info)' }}
+            onClick={() => onCambio({ ...filtros, usos: new Set() })}
+          >
+            Ver todos los usos
           </button>
         )}
       </div>

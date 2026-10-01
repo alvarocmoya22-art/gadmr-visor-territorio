@@ -85,6 +85,23 @@ export const RAMPA_DENSIDAD: Rgba[] = [
   [10, 56, 96, 250],
 ]
 
+/**
+ * Color de una banda de la isócrona.
+ *
+ * Lo usan el mapa y la leyenda del panel. Vive aquí y no en la capa para que
+ * no pueda pasar que la tabla diga un color y el mapa pinte otro.
+ *
+ * Sobre fondo oscuro el extremo claro de la rampa es el que más resalta, así
+ * que le toca al tramo más cercano: el núcleo bien servido queda encendido y
+ * la periferia se apaga hacia el azul profundo.
+ */
+export function colorBanda(minutos: number, tramos: number[]): Rgba {
+  const orden = [...tramos].sort((a, b) => a - b)
+  const i = orden.indexOf(minutos)
+  const paso = i < 0 ? RAMPA_DENSIDAD.length - 1 : 1 + i * 2
+  return RAMPA_DENSIDAD[Math.min(RAMPA_DENSIDAD.length - 1, paso)]
+}
+
 /** Color del extremo del arco que sale del barrio. */
 export const ARCO_ORIGEN = (): Rgba => aRgba(token('--gr-info'), 200)
 /** Color del extremo que llega al equipamiento. */

@@ -17,8 +17,10 @@ export type Analisis = 'ninguno' | 'distancia' | 'cobertura' | 'cruce' | 'invent
 /** Lo que el usuario ha elegido analizar. Vive en App y se pasa entero. */
 export interface EstadoAnalisis {
   activo: Analisis
-  /** Tipo de equipamiento; vale para distancia y para cobertura. */
+  /** Uso del equipamiento; vale para distancia y para cobertura. */
   tipo: string
+  /** Actividad concreta dentro del uso; vacío para contar todo el uso. */
+  elemento: string
   /** Nivel de la norma elegido, por su clave; de él sale el radio. */
   nivel: string
   /** De dónde salen los equipamientos que cuentan como servicio. */
@@ -36,6 +38,7 @@ export interface EstadoAnalisis {
 export const ANALISIS_INICIAL: EstadoAnalisis = {
   activo: 'ninguno',
   tipo: 'Educación',
+  elemento: '',
   nivel: 'EE1|400',
   fuente: 'gadm',
   gestion: 'todas',
@@ -76,8 +79,10 @@ interface Props {
   onAnalisis: (a: EstadoAnalisis) => void
   deficit: Deficit | null
   cobertura: Cobertura | null
-  /** Tipos del inventario, con cuántos hay de cada uno. */
+  /** Usos del inventario, con cuántos hay de cada uno. */
   tipos: { tipo: string; n: number }[]
+  /** Actividades del uso elegido, con su cuenta. */
+  elementos: { elemento: string; n: number }[]
   /** Los puntos que prestan el servicio elegido, y de dónde salen. */
   servicios: { servicios: unknown[]; deGadm: number; deOsm: number }
   cruce: Cruce | null
@@ -183,6 +188,7 @@ export default function PanelAnalisis({
   deficit,
   cobertura,
   tipos,
+  elementos,
   servicios,
   cruce,
   hallazgos,
@@ -225,7 +231,7 @@ export default function PanelAnalisis({
       {porBarrio && (
         <div className="space-y-2">
           <label className="block text-[11px]" style={{ color: 'var(--gr-tinta-3)' }}>
-            Tipo de equipamiento
+            Uso del equipamiento
             <select
               value={analisis.tipo}
               onChange={(e) => cambiar({ tipo: e.target.value })}
@@ -239,6 +245,28 @@ export default function PanelAnalisis({
               ))}
             </select>
           </label>
+
+          {/* Segundo nivel: el uso agrupa actividades muy distintas y medir
+              todas juntas responde otra pregunta. Solo aparece si hay mas de
+              una, que es casi siempre. */}
+          {elementos.length > 1 && (
+            <label className="block text-[11px]" style={{ color: 'var(--gr-tinta-3)' }}>
+              Elemento
+              <select
+                value={analisis.elemento}
+                onChange={(e) => cambiar({ elemento: e.target.value })}
+                className="mt-0.5 w-full rounded border px-2 py-1.5 text-[13px]"
+                style={campo}
+              >
+                <option value="">Todo el uso · {numero(elementos.reduce((s, e) => s + e.n, 0))}</option>
+                {elementos.map((e) => (
+                  <option key={e.elemento} value={e.elemento}>
+                    {e.elemento} · {numero(e.n)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
 
           <label className="block text-[11px]" style={{ color: 'var(--gr-tinta-3)' }}>
             Gestión del equipamiento

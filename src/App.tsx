@@ -30,8 +30,15 @@ import {
 import { descargarCsv, descargarGeoJSON, descargarShapefile } from './lib/exportar'
 import { barriosDe, calcularDeficit, cruzar, hallazgosACsv, sinInventariar } from './lib/analisis'
 import { distanciaM } from './lib/geo'
-import { calcularCobertura, serviciosDe, tiposDisponibles } from './lib/cobertura'
+import { calcularCobertura, elementosDe, serviciosDe, tiposDisponibles } from './lib/cobertura'
 import { claveNivel, nivelDe, nivelInicial } from './lib/norma'
+/*
+ * Solo los tipos: `import type` no deja nada en el paquete, asi que el modulo
+ * de isocronas y los dos megas de la red siguen cargandose con `import()` solo
+ * cuando alguien abre el escenario.
+ */
+import type { Isocrona, Red } from './lib/isocronas'
+import type { Campo } from './lib/isocronaSuperficie'
 import { avancePorPlataforma, URBANO } from './lib/municipal'
 import { VISTA_INICIAL } from './config/riobamba'
 import { MAPA_BASE_INICIAL } from './config/mapasBase'
@@ -80,6 +87,7 @@ export default function App() {
   const [calleElegida, setCalleElegida] = useState<Calle | null>(null)
   const [mapaBase, setMapaBase] = useState(MAPA_BASE_INICIAL)
   const [mapaCalor, setMapaCalor] = useState<MapaCalor>('ninguno')
+  const [colorEquip, setColorEquip] = useState<'cotejo' | 'uso'>('cotejo')
   const [analisis, setAnalisis] = useState<EstadoAnalisis>(ANALISIS_INICIAL)
   const [espacial, setEspacial] = useState<EstadoEspacial>(ESPACIAL_INICIAL)
   const [tema, setTema] = useState<Tema>('sistema')
@@ -154,6 +162,26 @@ export default function App() {
     [equipamientos, filtros],
   )
 
+  /*
+   * Los equipamientos de todo el urbano, al margen de la plataforma o el barrio
+   * elegidos. No es lo mismo que `equipAmbito` y la diferencia importa: la
+   * escuela que esta cien metros fuera del limite de la plataforma sigue
+   * sirviendo a quien vive dentro. Las isocronas salen de aqui y se recortan
+   * despues al ambito; medir solo con los de dentro inventaria vacios de
+   * cobertura que en la calle no existen.
+   */
+  const equipUrbano = useMemo(
+    () =>
+      filtrarEquipamientos(equipamientos, {
+        ...filtros,
+        barrio: null,
+        // Si el ambito es todo el canton se queda como esta; si es una
+        // plataforma concreta, se abre al urbano entero.
+        plataforma: filtros.plataforma ? URBANO : null,
+      }),
+    [equipamientos, filtros],
+  )
+
   /**
    * Los barrios del ambito. Alimenta tanto el selector como el analisis: si el
    * filtro ofrece unos barrios y la coropleta pinta otros, el mapa y el panel
@@ -182,6 +210,7 @@ export default function App() {
       serviciosDe(
         {
           tipo: analisis.tipo,
+          elemento: analisis.elemento,
           nivel: analisis.activo === 'cobertura' ? nivelActivo : null,
           fuente: analisis.fuente,
           gestion: analisis.gestion,
@@ -191,6 +220,7 @@ export default function App() {
       ),
     [
       analisis.tipo,
+      analisis.elemento,
       analisis.activo,
       analisis.fuente,
       analisis.gestion,
@@ -217,6 +247,23 @@ export default function App() {
    */
   const tipos = useMemo(() => tiposDisponibles(equipamientos), [equipamientos])
 
+  /**
+   * Los usos del inventario en el ambito, para la leyenda de equipamientos.
+   * Se calculan sin el filtro de usos, igual que la leyenda de categorias: si
+   * no, elegir uno dejaria los demas en cero y la lista dejaria de servir para
+   * saber que mas hay en el sector.
+   */
+  const usosEquip = useMemo(
+    () => tiposDisponibles(filtrarEquipamientos(equipamientos, { ...filtros, usos: new Set() })),
+    [equipamientos, filtros],
+  )
+
+  /** Las actividades del uso elegido, para el segundo nivel del selector. */
+  const elementos = useMemo(
+    () => elementosDe(equipamientos, analisis.tipo),
+    [equipamientos, analisis.tipo],
+  )
+
   const cobertura = useMemo(() => {
     if (analisis.activo !== 'cobertura' || !capasMun) return null
     const nivel = nivelActivo
@@ -224,6 +271,7 @@ export default function App() {
     if (!nivel || nivel.radio === null) return null
     return calcularCobertura(barriosAmbito, equipAmbito, ambitoPlataforma, {
       tipo: analisis.tipo,
+      elemento: analisis.elemento,
       nivel: nivel as typeof nivel & { radio: number },
       fuente: analisis.fuente,
       gestion: analisis.gestion,
@@ -231,6 +279,7 @@ export default function App() {
   }, [
       analisis.activo,
       analisis.tipo,
+      analisis.elemento,
       nivelActivo,
       analisis.fuente,
       analisis.gestion,
@@ -261,6 +310,27 @@ export default function App() {
    */
   const plataformaSel = capasMun?.plataformas.find((p) => p.clave === filtros.plataforma) ?? null
   const barrioSel = barriosAmbito.find((b) => b.nombre === filtros.barrio) ?? null
+
+  /**
+   * El ambito al que se recorta la isocrona: sus piezas y sus barrios.
+   *
+   * El calculo se hace con todo el urbano y se recorta aqui, nunca al reves.
+   * Los barrios van en el mismo sitio que las piezas porque son las dos caras
+   * de lo mismo: si el recorte dice una cosa y el denominador de poblacion
+   * dice otra, el porcentaje de habitantes servidos sale falso.
+   */
+  const recorte = useMemo(() => {
+    if (barrioSel) return { piezas: barrioSel.poligonos, barrios: [barrioSel] }
+    if (plataformaSel) return { piezas: plataformaSel.poligonos, barrios: barriosAmbito }
+    if (filtros.plataforma === URBANO) {
+      return {
+        piezas: (capasMun?.plataformas ?? []).flatMap((p) => p.poligonos),
+        barrios: barriosAmbito,
+      }
+    }
+    // Todo el canton: no hay limite dibujado al que recortar.
+    return { piezas: [], barrios: barriosAmbito }
+  }, [barrioSel, plataformaSel, filtros.plataforma, capasMun, barriosAmbito])
 
   const zonaTitulo =
     filtros.plataforma === URBANO
@@ -334,6 +404,140 @@ export default function App() {
       .sort((a, b) => b.pob * (b.distancia ?? 5000) - a.pob * (a.distancia ?? 5000))
   }, [verEspacial, espacial.escenario, espacial.tipoEquipamiento, barriosAmbito, equipAmbito])
 
+  /**
+   * Isocrona a pie desde los equipamientos elegidos.
+   *
+   * La red de calles pesa dos megas, asi que se carga la primera vez que
+   * alguien pide una isocrona y se queda en memoria. El calculo es un Dijkstra
+   * con todos los equipamientos como origen a la vez: lo que interesa es el
+   * tiempo al mas cercano, no a cada uno.
+   */
+  const [isocrona, setIsocrona] = useState<{
+    red: { aristas: [number, number, number, number[][]][] }
+    alcanzables: { arista: number; minutos: number }[]
+    tramos: number[]
+    metrosPorTramo: Map<number, number>
+    /** La mancha en el suelo: lo que se dibuja y lo que se mide. */
+    bandas: { minutos: number; piezas: [number, number][][][]; hectareas: number }[]
+    /** Habitantes del ambito y cuantos caen dentro de cada banda. */
+    poblacion: number
+    poblacionPorTramo: Map<number, number>
+    origenes: number
+    sueltos: number
+  } | null>(null)
+
+  /**
+   * El analisis del casco urbano, tal cual, sin recortar.
+   *
+   * Es la pieza cara —Dijkstra sobre doce mil nodos y seiscientos kilometros de
+   * calle convertidos en campo de minutos— y **no depende del ambito**: solo de
+   * que equipamiento se mira, de que gestion y de cuantos minutos. Guardarla
+   * aqui es lo que permite que cambiar de plataforma o de barrio sea solo un
+   * recorte y no un analisis nuevo.
+   */
+  const analisisUrbano = useRef<{
+    clave: string
+    red: Red
+    iso: Isocrona
+    campo: Campo
+  } | null>(null)
+
+  useEffect(() => {
+    if (!verEspacial || espacial.escenario !== 'isocronas') {
+      setIsocrona(null)
+      return
+    }
+    let vivo = true
+    setIsocrona(null)
+    void (async () => {
+      const iso = await import('./lib/isocronas')
+      const sup = await import('./lib/isocronaSuperficie')
+      if (!vivo) return
+      const tramos = iso.MINUTOS.filter((m) => m <= espacial.minutos)
+
+      const origenes = equipUrbano.filter(
+        (e) =>
+          e.tipo === espacial.tipoEquipamiento &&
+          (espacial.gestion === 'todas' || e.gestion === espacial.gestion),
+      )
+
+      /*
+       * La clave no lleva el ambito a proposito: el mismo analisis del urbano
+       * sirve para la ciudad entera, para una plataforma y para un barrio.
+       *
+       * Si lleva, en cambio, la lista de equipamientos de partida. Con solo el
+       * tipo y la gestion, un filtro de uso o una busqueda por texto cambiarian
+       * los origenes sin cambiar la clave y se reutilizaria un analisis que ya
+       * no corresponde: la cifra saldria de unos equipamientos y la pantalla
+       * diria otros.
+       */
+      const clave = [
+        espacial.tipoEquipamiento,
+        espacial.gestion,
+        espacial.minutos,
+        origenes.map((e) => e.id).join(','),
+      ].join('|')
+      let guardado = analisisUrbano.current
+      if (!guardado || guardado.clave !== clave) {
+        const red = await iso.cargarRed()
+        if (!vivo) return
+        const r = iso.calcularIsocrona(red, origenes, espacial.minutos)
+        /*
+         * La isocrona se calcula sobre las calles, pero se lee como superficie:
+         * el campo de minutos convierte lo uno en lo otro y de el salen las
+         * cifras —contorno, hectareas y habitantes—, para que todas digan lo
+         * mismo.
+         */
+        const campo = sup.campoDeTiempos(red, r, espacial.minutos)
+        if (!campo) {
+          if (vivo) setIsocrona(null)
+          return
+        }
+        guardado = { clave, red, iso: r, campo }
+        analisisUrbano.current = guardado
+      }
+      if (!vivo) return
+
+      const { red, iso: r } = guardado
+      // El recorte trabaja sobre una copia: el analisis del urbano se guarda
+      // entero para poder recortarlo otra vez por otro ambito.
+      const campo = { ...guardado.campo, minutos: Float32Array.from(guardado.campo.minutos) }
+      // Primero el recorte y despues todo lo demas: el contorno, las hectareas
+      // y los habitantes salen del mismo campo ya recortado y no pueden
+      // contradecirse entre si.
+      sup.recortarCampo(campo, recorte.piezas)
+      const bandas = sup.bandasDe(campo, tramos)
+      // Las calles tambien se recortan: si no, la columna de kilometros
+      // hablaria del urbano entero mientras las otras dos hablan del ambito.
+      const calles = sup.recortarCalles(red, r, campo)
+      const gente = sup.poblacionPorBanda(recorte.barrios, campo, tramos)
+      if (!vivo) return
+
+      setIsocrona({
+        red: red as unknown as { aristas: [number, number, number, number[][]][] },
+        alcanzables: calles.alcanzables,
+        tramos,
+        metrosPorTramo: calles.metrosPorTramo,
+        bandas,
+        poblacion: gente.poblacion,
+        poblacionPorTramo: gente.porTramo,
+        origenes: r.origenes,
+        sueltos: r.sueltos,
+      })
+    })()
+    return () => {
+      vivo = false
+    }
+  }, [
+    verEspacial,
+    espacial.escenario,
+    espacial.tipoEquipamiento,
+    espacial.gestion,
+    espacial.minutos,
+    equipUrbano,
+    recorte,
+  ])
+
   const porCategoriaEspacial = useMemo(
     () => resumen.porCategoria.map((c) => ({ clave: c.clave as string, n: c.total })),
     [resumen],
@@ -391,7 +595,8 @@ export default function App() {
   const cambiarAnalisis = (a: EstadoAnalisis) => {
     if (a.tipo === analisis.tipo) return setAnalisis(a)
     const inicial = nivelInicial(a.tipo)
-    setAnalisis({ ...a, nivel: inicial ? claveNivel(inicial) : a.nivel })
+    // El elemento pertenece al uso anterior y no existe en el nuevo: se suelta.
+    setAnalisis({ ...a, elemento: '', nivel: inicial ? claveNivel(inicial) : a.nivel })
   }
 
   const elegirPunto = (id: string | null) => {
@@ -622,6 +827,7 @@ export default function App() {
               cruce ? { a: cruce.a, b: cruce.b, desatendidos: cruce.desatendidos } : null
             }
             onElegirBarrio={elegirBarrio}
+            colorEquip={colorEquip}
             espacial={
               verEspacial
                 ? {
@@ -634,6 +840,15 @@ export default function App() {
                     altura: espacial.altura,
                     colorBarrio: espacial.colorBarrio,
                     barrios: barriosAmbito,
+                    isocrona: isocrona
+                      ? {
+                          red: isocrona.red,
+                          alcanzables: isocrona.alcanzables,
+                          tramos: isocrona.tramos,
+                          bandas: isocrona.bandas,
+                        }
+                      : null,
+                    verCalles: espacial.verCalles,
                   }
                 : null
             }
@@ -705,6 +920,9 @@ export default function App() {
                   onMapaBase={setMapaBase}
                   mapaCalor={mapaCalor}
                   onMapaCalor={setMapaCalor}
+                  usosEquip={usosEquip}
+                  colorEquip={colorEquip}
+                  onColorEquip={setColorEquip}
                   onCambio={cambiarFiltros}
                   onCapas={setCapas}
                 />
@@ -718,6 +936,7 @@ export default function App() {
                 deficit={deficit}
                 cobertura={cobertura}
                 tipos={tipos}
+                elementos={elementos}
                 servicios={servicios}
                 cruce={cruce}
                 hallazgos={hallazgos}
@@ -739,6 +958,7 @@ export default function App() {
                 totalEquipamientos={equipFiltrados.length}
                 barrios={barriosAmbito}
                 prioridades={prioridades}
+                isocrona={isocrona}
                 flujos={flujos?.resumen ?? null}
                 arcos={flujos?.arcos ?? 0}
                 ambito={ambitoRotulo}

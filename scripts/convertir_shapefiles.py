@@ -110,6 +110,19 @@ coubicados = int(e.duplicated(subset=["lon", "lat"], keep=False).sum())
 if coubicados:
     log(f"  equipamientos que comparten posicion con otro: {coubicados}")
 
+# Registros de prueba que quedaron en la capa oficial. Se detectan por el
+# nombre exacto o por una observacion que empieza por «prueba»; no vale con
+# buscar la palabra suelta porque «Salon del Reino de los tesTIGOs de Jehova»
+# contiene «test» y es un equipamiento real.
+_nom = e["nombre"].fillna("").astype(str).str.strip().str.lower()
+_obs = e["observaciones"].fillna("").astype(str).str.strip().str.lower()
+ensayo = _nom.eq("prueba") | _obs.str.startswith("prueba") | _obs.eq("xxxxx")
+if ensayo.any():
+    log(f"  registros de prueba descartados: {int(ensayo.sum())}")
+    for _, r in e[ensayo].iterrows():
+        log(f"      {str(r['nombre'])[:30]:32} [{r['tipo']}]  obs: {str(r['observaciones'])[:24]}")
+    e = e[~ensayo].copy()
+
 e["nombre"] = e["nombre"].fillna("").astype(str).str.strip()
 for c in ("tipo", "tipologia", "gestion", "estado", "elemento", "parroquia"):
     e[c] = e[c].fillna("").astype(str).str.strip()

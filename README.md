@@ -59,7 +59,7 @@ al principio de `scripts/convertir_shapefiles.py`.
 | Plataformas | 18 (A–Q más Ñ) | **Unidad de asignación de campo**: filtro, encuadre y avance por sector |
 | Parroquias urbanas | 5 | Contexto: Lizarzaburu, Velasco, Yaruquíes, Veloz, Maldonado |
 | Barrios | 212 polígonos, 204 barrios | Contexto y filtro, con el nombre rotulado sobre el mapa |
-| Equipamientos | 1.091 | Levantamiento del entorno, contrastado punto a punto contra OSM |
+| Equipamientos | 1.083 | Levantamiento del entorno, contrastado punto a punto contra OSM |
 
 Se convierten con `scripts/convertir_shapefiles.py` (requiere `geopandas`), que
 reproyecta a WGS84 y escribe en `public/datos/`. **Esa es la única vía de
@@ -183,19 +183,31 @@ sí conserva las 6 horas, para no machacar los espejos en cada recarga.
 
 ## Mapas base y filtro por barrio
 
-El panel permite cambiar el **mapa base** entre cuatro fondos, todos con teselas
+El panel permite cambiar el **mapa base** entre seis fondos, todos con teselas
 públicas y sin credencial:
 
 | Mapa | Para qué |
 |---|---|
 | OpenStreetMap | callejero con nombres y comercios |
 | Humanitario | trazado limpio: resaltan los puntos y los límites |
+| Oscuro | fondo casi negro (lienzo de Esri): el color de los análisis destaca |
+| Gris claro | el mismo lienzo en claro, para imprimir y para informes |
 | Satélite | ortofoto (Esri): construcción y ocupación real |
 | Topográfico | relieve y curvas de nivel; tarda unos segundos |
 
-Los cuatro se declaran juntos en el estilo y solo se alterna su visibilidad:
-cambiar de estilo entero obligaría a reconstruir todas las capas de datos y a
-recargar los GeoJSON.
+Todos se declaran juntos en el estilo y solo se alterna su visibilidad: cambiar
+de estilo entero obligaría a reconstruir todas las capas de datos y a recargar
+los GeoJSON.
+
+**El fondo oscuro no es cuestión de gusto.** Sobre gris casi negro, una mancha
+translúcida —una isócrona, un mapa de calor, una columna de deck.gl— se lee por
+sí sola; sobre el callejero compite con las calles rojas y los parques verdes
+que el propio fondo ya trae. Los dos lienzos de Esri vienen sin una palabra
+escrita: los rótulos van en una capa transparente aparte, que se enciende y se
+apaga con su fondo. Dejan de tener teselas propias en el **zoom 16** y a partir
+de ahí devuelven un cuadro con «Map data not yet available», así que se declara
+ese `maxzoom` y MapLibre estira la última tesela buena en vez de enseñar el
+cartel.
 
 **Un 200 no basta para dar por bueno un mapa base.** Aquí figuraba CARTO
 Positron, cuyas teselas siguen respondiendo `200` con 18 KB… que resultaron ser
@@ -280,6 +292,7 @@ controles sin duplicar nada.
 |---|---|---|
 | Puntos por categoría | `ScatterplotLayer` | Registros de OSM filtrados, color por categoría o por estado |
 | Densidad en hexágonos | `HexagonLayer` | Los mismos registros, agregados; radio de 75 a 500 m, 3D opcional |
+| Isócronas a pie | `PolygonLayer` | Superficie a la que se llega andando en 5, 10 o 15 min desde el equipamiento más cercano, por la red real |
 | Barrios en 3D | `PolygonLayer` | Altura por población o viviendas, color por distancia al equipamiento o por carencia de servicios básicos |
 | Asignación barrio → equipamiento | `ArcLayer` | Centro del barrio al equipamiento más cercano; grosor = población |
 | Recorridos de campo | `TripsLayer` | **Bloqueado**, ver abajo |
@@ -299,6 +312,93 @@ aparece deshabilitado y explica el motivo en pantalla.
 La vía real son las **secuencias de Mapillary**, que sí llevan `captured_at`
 por imagen. Queda pendiente de decidir porque la API limita cada consulta a
 0,01 grados² y habría que trocear cada plataforma en varias peticiones.
+
+### Las isócronas sí miden por calle
+
+Todo lo demás del visor mide en línea recta, y por calle siempre se anda más:
+una manzana cerrada, una quebrada o un muro convierten 400 m de radio en 700 m
+de recorrido. Las isócronas responden la pregunta de verdad: **hasta dónde se
+llega andando**.
+
+El grafo lo prepara `scripts/red_peatonal.py` con las vías caminables de OSM y
+vive en `public/datos/red.json`:
+
+- **12.617 nodos** de decisión —cruces y extremos— de 46.633 vértices distintos
+- **17.636 aristas**, cada una con su longitud real y su trazado
+- el **98,3 %** de los nodos forman una sola pieza; hay 47 trozos sueltos, el
+  mayor de 43 nodos
+
+Los vértices intermedios de una calle no son nodos: no se decide nada en ellos.
+Colapsarlos deja el grafo en la mitad sin perder un metro, porque la longitud de
+la arista sigue siendo la de la polilínea completa.
+
+El cálculo es un **Dijkstra con todos los equipamientos como origen a la vez**,
+no uno por equipamiento: lo que interesa es el tiempo al más cercano, y así el
+coste no crece con cuántos haya.
+
+#### De las calles a la mancha
+
+El resultado del Dijkstra son calles, pero lo que se lee en un plano de
+accesibilidad es la **superficie servida**: es lo que se compara con un barrio,
+con un predio o con un radio de la ordenanza. El paso de una cosa a la otra lo
+hace `src/lib/isocronaSuperficie.ts` y no es cosmético, así que conviene saber
+cómo:
+
+1. Se recorre cada calle alcanzable interpolando el tiempo entre sus dos
+   extremos, ya calculados.
+2. Cada punto del recorrido **moja el suelo a su alrededor hasta 120 m**,
+   sumando lo que se tarda en andar esos metros. Es el tramo final —de la
+   calzada a la puerta— que ninguna red de calles contiene: quien vive a mitad
+   de cuadra no está sobre el eje de la calle.
+3. De ese campo de minutos, en celdas de 40 m, se sacan los contornos
+   (`d3-contour`).
+
+Aquí figuraba lo contrario: que se dibujaban las calles y no un polígono porque
+una mancha cerrada daría por alcanzado el interior de las manzanas. El interior
+de la manzana **sí se alcanza** —es donde vive la gente— y lo que faltaba era
+decir con cuántos metros, no evitar el polígono. Ahora esos metros son un
+parámetro a la vista (`ALCANCE_FUERA_DE_CALLE_M`) y no un efecto del dibujo. Las
+calles siguen estando: se encienden con una casilla, encima de la mancha.
+
+#### Se calcula con todo el urbano y se recorta después
+
+El alcance sale **siempre de todos los equipamientos del urbano**, y el filtro
+de ámbito recorta el resultado; nunca al revés. Son dos cosas distintas y
+confundirlas falsea la cifra: la escuela que está cien metros fuera del límite
+de la plataforma sigue sirviendo a quien vive dentro, y no contarla haría
+aparecer un vacío de cobertura que en la calle no existe. El límite
+administrativo decide **qué se mira**, no por dónde se puede andar.
+
+El recorte se aplica al campo de minutos, antes de sacar contornos y cifras, así
+que la mancha, las hectáreas, los habitantes y los kilómetros de calle salen
+los cuatro del mismo campo recortado y no pueden contradecirse. En la plataforma
+D, por ejemplo: 112 ha y 8.609 habitantes a 10 minutos —el 66 % de los 13.017
+que viven ahí— medidos con los 191 equipamientos de toda la ciudad.
+
+Con los 196 equipamientos educativos del urbano, de los que **191 enganchan con
+la red** —5 no tienen ninguna calle cerca y quedan fuera del cálculo—:
+
+| Hasta | Hectáreas | Habitantes | km de calle |
+|---|---|---|---|
+| 5 min | 1.929 | 131.278 | 376 |
+| 10 min | 3.029 | 163.118 | 600 |
+| 15 min | 3.889 | 170.151 | 733 |
+
+Las tres columnas son **acumuladas**: la fila de 10 minutos contiene la de 5. La
+superficie se cuenta en celdas del campo y no midiendo el polígono, porque el
+contorno es una simplificación del campo y el campo es el dato. Los habitantes
+salen del Censo 2022 repartido por edificios, con la misma rejilla de muestreo
+que la cobertura por radio, para que las dos cifras del visor sean comparables.
+
+**Lo que no tiene en cuenta**, y hay que decirlo cada vez que se enseñe: la
+pendiente —Riobamba está a 2.750 m y sube, así que cuesta arriba el alcance real
+es menor—, las esperas en los cruces y si hay vereda o no. Se camina a 4,5 km/h.
+
+Regenerar la red cuando cambien las calles de OSM:
+
+```bash
+python scripts/red_peatonal.py
+```
 
 ### Altura y color responden preguntas distintas
 
@@ -407,13 +507,58 @@ clasificó en ese nivel**, sin adivinar.
 La plataforma declarada coincide con la geométrica en 1.058 de 1.094 registros;
 solo dos discrepan.
 
+### Dos leyendas, y separadas a propósito
+
+En la pestaña Filtros hay dos listas que no se mezclan: **Registrados por
+categoría** (las 9 de OpenStreetMap) y **Equipamientos del GADM por uso** (los
+12 de la Tabla 3). De todas ellas, solo *Educación* y *Salud* significan lo
+mismo en las dos:
+
+| Solo en OSM | Solo en el inventario |
+|---|---|
+| Comercio 774, Alimentación 303, Patrimonio 124 | Recreativo y Deporte 282, Religioso 99, Cultural 47, Infraestructura 46, Especial 39, Bienestar Social 35, Servicios Funerarios 9 |
+
+Juntarlas en una sola lista invitaría a sumar 2.440 registros con 1.083
+equipamientos, que no son el mismo universo y cuyo solapamiento es justo lo que
+mide la cola de «levantado en OSM y no inventariado».
+
+**La forma distingue la fuente y el color, la categoría**: los registros de OSM
+son círculos rellenos y los equipamientos del GADM, anillos huecos. El selector
+«Colorear los anillos por» decide si el anillo dice el estado del cotejo con OSM
+—lo de siempre— o el uso, y entonces la lista de usos pasa a ser una leyenda de
+color de verdad.
+
+Los doce usos necesitan cuatro series más que las ocho del sistema, así que se
+añadieron `--gr-s9` a `--gr-s12` en claro y en oscuro. Aun así, **doce colores
+cualitativos están en el límite de lo distinguible** —el consenso práctico son
+ocho o diez—, y por eso la muestra junto a cada nombre en la lista no es
+decorativa: es lo que permite leer el mapa.
+
+### El inventario tiene dos niveles
+
+`tipo_eleme` agrupa por uso y `elemento` baja a la actividad concreta, así que
+el visor ofrece los dos: se elige «Recreativo y Deporte» y luego, si se quiere,
+«Canchas de vóley». No es un matiz: ese uso son 282 cosas distintas —117 canchas
+múltiples, 48 parques infantiles, 32 canchas de vóley, 25 parques con gimnasio—
+y medir la cobertura de todas juntas responde otra pregunta.
+
+Los dos niveles están muy correlacionados con la tipología, porque el levantador
+asignó el nivel según la actividad: **los 48 recreativos de tipología Barrial son
+todos parques infantiles**. Donde el segundo nivel sí discrimina es dentro de lo
+Zonal, que son 670 de los 1.083.
+
 ### Lo que se descarta al convertir
+
+**Ocho registros de prueba** que quedaron en la capa oficial, todos en la
+Plataforma K y cinco de ellos clasificados como Educación, así que inflaban ese
+conteo. Se detectan por el nombre exacto «prueba» o por una observación que
+empieza por esa palabra; no vale buscar la palabra suelta, porque «Salón del
+Reino de los **test**igos de Jehová» la contiene y es un equipamiento real.
 
 **Tres registros con coordenadas imposibles** —latitud −90 y longitudes de 107 y
 132— que son fallos de captura del GPS: «Colegio», «Carlos Garbay (sede…)» y
 «Vicente Ramón Roca». No se pueden ubicar, así que el script los descarta y los
-lista en el log para que se corrijan en origen. Por eso el visor carga 1.091 y
-no 1.094.
+lista en el log para que se corrijan en origen. Entre los ocho de prueba y estos tres, el visor carga 1.083 de los 1.094.
 
 **47 registros comparten posición con otro**, en 13 puntos. En el parque central
 de Yaruquíes hay seis en las mismas coordenadas: casa comunal, estadio, parada

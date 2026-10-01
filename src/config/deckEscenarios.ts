@@ -15,7 +15,13 @@
  */
 import type { ClaveCategoria } from '../lib/categorias'
 
-export type ClaveEscenario = 'puntos' | 'densidad' | 'barrios' | 'flujos' | 'recorridos'
+export type ClaveEscenario =
+  | 'puntos'
+  | 'densidad'
+  | 'barrios'
+  | 'isocronas'
+  | 'flujos'
+  | 'recorridos'
 
 export interface Escenario {
   clave: ClaveEscenario
@@ -61,6 +67,14 @@ export const ESCENARIOS: Escenario[] = [
     resumen: 'Cada barrio levantado por su población y teñido por lo lejos que le queda el servicio.',
     origen:
       'Población del Censo 2022 y distancia al equipamiento más cercano del tipo elegido.',
+    bloqueado: null,
+  },
+  {
+    clave: 'isocronas',
+    rotulo: 'Isócronas a pie',
+    resumen: 'La mancha del territorio al que se llega andando en 5, 10 o 15 minutos.',
+    origen:
+      'Red de calles de OpenStreetMap, a 4,5 km/h, y población del Censo 2022. Es distancia por calle, no en línea recta.',
     bloqueado: null,
   },
   {
@@ -178,6 +192,17 @@ export type ColorBarrio = 'distancia' | 'servicios'
  * celda de 150 m.
  */
 export const ELEVACION_BARRIOS = 320
+
+/**
+ * Cuánto se admite andar fuera de la calle en la isócrona, en metros.
+ *
+ * Es la distancia del eje de la calzada a la puerta más el fondo de media
+ * manzana: quien vive a mitad de cuadra no está sobre el eje. Con 120 m la
+ * mancha cubre el tejido urbano sin saltar a la manzana de enfrente cuando la
+ * calle que la serviría no existe. Vive aquí, y no junto al cálculo, porque el
+ * panel lo enseña y el cálculo va en un módulo diferido.
+ */
+export const ALCANCE_FUERA_DE_CALLE_M = 120
 
 /** VALIDAR: umbral en metros por encima del cual el arco se marca en alerta. */
 export const ARCO_ALERTA_M = 1000

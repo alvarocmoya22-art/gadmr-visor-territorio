@@ -1,9 +1,9 @@
 /**
  * Mapas base disponibles. Todos son teselas públicas sin credencial.
  *
- * Se declaran los cuatro a la vez en el estilo y solo se alterna su
- * visibilidad: cambiar el estilo entero obligaría a reconstruir todas las capas
- * de datos y a volver a cargar los GeoJSON.
+ * Se declaran todos a la vez en el estilo y solo se alterna su visibilidad:
+ * cambiar el estilo entero obligaría a reconstruir todas las capas de datos y a
+ * volver a cargar los GeoJSON.
  *
  * Antes de publicar el visor fuera de la red municipal conviene revisar la
  * política de uso de cada proveedor: la de OpenStreetMap, en particular, no
@@ -15,11 +15,27 @@ export interface MapaBase {
   /** Para qué sirve mejor; se muestra en el selector. */
   nota: string
   teselas: string[]
+  /**
+   * Teselas de rótulos, cuando el proveedor los sirve aparte del fondo.
+   *
+   * Los lienzos de Esri vienen sin una sola palabra: el nombre de las calles y
+   * los barrios va en una capa transparente encima. Sin ella el fondo es
+   * bonito y no se sabe dónde está uno.
+   */
+  rotulos?: string[]
   atribucion: string
   maxzoom: number
   /** Cierto si el fondo es oscuro: los rótulos claros necesitan saberlo. */
   oscuro?: boolean
 }
+
+/**
+ * Los lienzos de Esri, que son los dos fondos neutros de esta lista, dejan de
+ * tener teselas propias a partir de este zoom y devuelven un cuadro gris con
+ * «Map data not yet available». Declarándolo, MapLibre estira la última que
+ * tiene en vez de enseñar ese cartel.
+ */
+const MAXZOOM_LIENZO_ESRI = 16
 
 export const MAPAS_BASE: MapaBase[] = [
   {
@@ -44,6 +60,43 @@ export const MAPAS_BASE: MapaBase[] = [
     atribucion:
       '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> · teselas: <a href="https://www.hotosm.org/">HOT</a> / <a href="https://openstreetmap.fr/">OSM France</a>',
     maxzoom: 19,
+  },
+  {
+    /*
+     * El fondo oscuro no es cuestión de gusto: sobre gris casi negro, una
+     * mancha de color translúcida —una isócrona, un mapa de calor, una columna
+     * de deck.gl— se lee por sí sola, mientras que sobre el callejero compite
+     * con las calles rojas y los parques verdes que ya trae el fondo.
+     *
+     * CARTO Dark Matter, que sería el candidato obvio, ya no sirve: sus
+     * teselas siguen devolviendo 200 pero con «API KEY REQUIRED» impreso
+     * encima, igual que le pasó a Positron.
+     */
+    clave: 'oscuro',
+    rotulo: 'Oscuro',
+    nota: 'fondo casi negro: el color de los análisis destaca',
+    teselas: [
+      'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+    ],
+    rotulos: [
+      'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}',
+    ],
+    atribucion: 'Lienzo oscuro: Esri, HERE, Garmin, © OpenStreetMap y colaboradores',
+    maxzoom: MAXZOOM_LIENZO_ESRI,
+    oscuro: true,
+  },
+  {
+    clave: 'gris',
+    rotulo: 'Gris claro',
+    nota: 'el mismo lienzo en claro, para imprimir y para informes',
+    teselas: [
+      'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+    ],
+    rotulos: [
+      'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}',
+    ],
+    atribucion: 'Lienzo claro: Esri, HERE, Garmin, © OpenStreetMap y colaboradores',
+    maxzoom: MAXZOOM_LIENZO_ESRI,
   },
   {
     clave: 'satelite',
@@ -71,3 +124,6 @@ export const MAPA_BASE_INICIAL = 'osm'
 
 /** Identificador de la capa raster de un mapa base. */
 export const capaDe = (clave: string) => `base-${clave}`
+
+/** Identificador de su capa de rótulos, cuando la tiene. */
+export const capaRotulosDe = (clave: string) => `base-${clave}-rotulos`

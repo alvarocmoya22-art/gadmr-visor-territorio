@@ -76,6 +76,12 @@ export type Gestion = 'todas' | 'Público' | 'Privado'
 /** Qué se cuenta como servicio: el tipo, el nivel, la gestión y de qué fuente. */
 export interface Seleccion {
   tipo: string
+  /**
+   * Actividad concreta dentro del uso, p. ej. «Canchas de vóley» dentro de
+   * «Recreativo y Deporte». Cadena vacía para no bajar de nivel y contar todo
+   * el uso. Solo afecta al inventario: OSM no tiene esta clasificación.
+   */
+  elemento: string
   /** Nivel de la norma; null cuando no aplica, como en la capa de distancia. */
   nivel: NivelNorma | null
   fuente: FuenteCobertura
@@ -91,7 +97,7 @@ export interface Seleccion {
  * escuela, no el de la universidad.
  */
 export function serviciosDe(
-  { tipo, nivel, fuente, gestion }: Seleccion,
+  { tipo, elemento, nivel, fuente, gestion }: Seleccion,
   equipamientos: EquipamientoMunicipal[],
   puntos: Punto[],
 ): { servicios: Servicio[]; deGadm: number; deOsm: number } {
@@ -108,6 +114,7 @@ export function serviciosDe(
       : equipamientos.filter(
           (e) =>
             e.tipo === tipo &&
+            (!elemento || e.elemento === elemento) &&
             (!nivel || !nivel.tipologia || e.tipologia === nivel.tipologia) &&
             (gestion === 'todas' || e.gestion === gestion),
         )
@@ -231,6 +238,7 @@ function circulo(lon: number, lat: number, radioM: number, lados = 36): number[]
 
 export interface OpcionesCobertura {
   tipo: string
+  elemento: string
   /** Nivel de la norma que se está midiendo; de él sale el radio. */
   nivel: NivelNorma & { radio: number }
   fuente: FuenteCobertura
@@ -247,11 +255,11 @@ export function calcularCobertura(
   barrios: Barrio[],
   equipamientos: EquipamientoMunicipal[],
   puntos: Punto[],
-  { tipo, nivel, fuente, gestion }: OpcionesCobertura,
+  { tipo, elemento, nivel, fuente, gestion }: OpcionesCobertura,
 ): Cobertura {
   const radio = nivel.radio
   const { servicios, deGadm, deOsm } = serviciosDe(
-    { tipo, nivel, fuente, gestion },
+    { tipo, elemento, nivel, fuente, gestion },
     equipamientos,
     puntos,
   )
@@ -364,7 +372,7 @@ export function calcularCobertura(
   }
 }
 
-/** Los tipos del inventario, con cuántos equipamientos tiene cada uno. */
+/** Los usos del inventario, con cuántos equipamientos tiene cada uno. */
 export function tiposDisponibles(
   equipamientos: EquipamientoMunicipal[],
 ): { tipo: string; n: number }[] {
@@ -373,4 +381,27 @@ export function tiposDisponibles(
   return [...cuenta.entries()]
     .map(([tipo, n]) => ({ tipo, n }))
     .sort((a, b) => b.n - a.n)
+}
+
+/**
+ * Las actividades que hay dentro de un uso, con su cuenta.
+ *
+ * El inventario está estructurado en dos niveles: el uso de la Tabla 3 y el
+ * elemento concreto. «Recreativo y Deporte» son 282 cosas distintas —canchas
+ * múltiples, parques infantiles, canchas de vóley, gimnasios al aire libre— y
+ * medir la cobertura de todas juntas responde una pregunta distinta que medir
+ * la de los parques infantiles.
+ */
+export function elementosDe(
+  equipamientos: EquipamientoMunicipal[],
+  tipo: string,
+): { elemento: string; n: number }[] {
+  const cuenta = new Map<string, number>()
+  for (const e of equipamientos) {
+    if (e.tipo !== tipo || !e.elemento) continue
+    cuenta.set(e.elemento, (cuenta.get(e.elemento) ?? 0) + 1)
+  }
+  return [...cuenta.entries()]
+    .map(([elemento, n]) => ({ elemento, n }))
+    .sort((a, b) => b.n - a.n || a.elemento.localeCompare(b.elemento, 'es'))
 }

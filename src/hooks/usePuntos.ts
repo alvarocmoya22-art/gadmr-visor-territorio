@@ -15,6 +15,8 @@ export type EstadoCarga = 'cargando' | 'listo' | 'error'
 
 export interface Filtros {
   categorias: Set<ClaveCategoria>
+  /** Usos del inventario del GADM; vacio = todos. Es otra taxonomia que la de OSM. */
+  usos: Set<string>
   /** 'todas' | 'pendientes' — pendientes = sin verificar o verificacion vencida. */
   frescura: 'todas' | 'pendientes'
   /** Solo fichas a las que les falta algun campo clave. */
@@ -34,6 +36,7 @@ export interface Filtros {
  */
 export const FILTROS_INICIALES: Filtros = {
   categorias: new Set(),
+  usos: new Set(),
   frescura: 'todas',
   soloIncompletos: false,
   plataforma: URBANO,
@@ -139,6 +142,7 @@ export function filtrarEquipamientos(
 ): EquipamientoMunicipal[] {
   const texto = f.texto.trim().toLowerCase()
   return equipamientos.filter((e) => {
+    if (f.usos.size > 0 && !f.usos.has(e.tipo)) return false
     if (f.plataforma === URBANO) {
       if (!e.plataforma) return false
     } else if (f.plataforma && e.plataforma !== f.plataforma) return false

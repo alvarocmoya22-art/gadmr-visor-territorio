@@ -5,6 +5,7 @@ import {
   RADIOS_HEXAGONO,
   RADIO_HEXAGONO_INICIAL,
   ARCO_ALERTA_M,
+  ALCANCE_FUERA_DE_CALLE_M,
   MAX_ARCOS,
   type AlturaBarrio,
   type ClaveEscenario,
@@ -12,7 +13,9 @@ import {
   type ColorPor,
   type PesoDensidad,
 } from '../config/deckEscenarios'
-import { RAMPA_DENSIDAD } from '../lib/deck/colores'
+import { RAMPA_DENSIDAD, colorBanda } from '../lib/deck/colores'
+import { MINUTOS, VELOCIDAD_M_MIN } from '../lib/isocronas'
+import type { Gestion } from '../lib/cobertura'
 
 /** Lo elegido en la vista de análisis espacial. Vive en App. */
 export interface EstadoEspacial {
@@ -24,6 +27,12 @@ export interface EstadoEspacial {
   tipoEquipamiento: string
   altura: AlturaBarrio
   colorBarrio: ColorBarrio
+  /** Minutos de caminata de la isócrona. */
+  minutos: number
+  /** Público, privado o los dos. */
+  gestion: Gestion
+  /** Dibujar además las calles alcanzables sobre la mancha. */
+  verCalles: boolean
 }
 
 export const ESPACIAL_INICIAL: EstadoEspacial = {
@@ -35,6 +44,9 @@ export const ESPACIAL_INICIAL: EstadoEspacial = {
   tipoEquipamiento: 'Educación',
   altura: 'poblacion',
   colorBarrio: 'distancia',
+  minutos: 10,
+  gestion: 'todas',
+  verCalles: false,
 }
 
 /** Resumen que calcula `lib/deck/escenarios` y esta vista solo muestra. */
@@ -62,6 +74,15 @@ interface Props {
   barrios: { nombre: string; pob: number }[]
   /** Los barrios con más gente peor servida, ya ordenados. */
   prioridades: { nombre: string; pob: number; distancia: number | null }[]
+  /** Cifras de la isócrona; null mientras se calcula. */
+  isocrona: {
+    metrosPorTramo: Map<number, number>
+    bandas: { minutos: number; hectareas: number }[]
+    poblacion: number
+    poblacionPorTramo: Map<number, number>
+    origenes: number
+    sueltos: number
+  } | null
   /** Resumen de la asignación; null mientras no toque. */
   flujos: ResumenFlujos | null
   arcos: number
@@ -111,6 +132,7 @@ export default function PanelEspacial({
   totalEquipamientos,
   barrios,
   prioridades,
+  isocrona,
   flujos,
   arcos,
   ambito,
@@ -435,6 +457,191 @@ export default function PanelEspacial({
             barrio alto y oscuro es una prioridad; uno bajo y oscuro, no tanto, porque casi no
             hay a quien atender. La distancia es en línea recta desde el centro del barrio.
           </p>
+        </>
+      )}
+
+      {/* ───────────────────────────────────────── isócronas */}
+      {estado.escenario === 'isocronas' && (
+        <>
+          <label className="block text-[11px]" style={{ color: 'var(--gr-tinta-3)' }}>
+            Equipamiento de partida
+            <select
+              value={estado.tipoEquipamiento}
+              onChange={(e) => cambiar({ tipoEquipamiento: e.target.value })}
+              className="mt-0.5 w-full rounded border px-2 py-1.5 text-[13px]"
+              style={{ ...campo, ...TACTIL }}
+            >
+              {tipos.map((t) => (
+                <option key={t.tipo} value={t.tipo}>
+                  {t.tipo} · {numero(t.n)}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="block text-[11px]" style={{ color: 'var(--gr-tinta-3)' }}>
+            Gestión
+            <select
+              value={estado.gestion}
+              onChange={(e) => cambiar({ gestion: e.target.value as Gestion })}
+              className="mt-0.5 w-full rounded border px-2 py-1.5 text-[13px]"
+              style={{ ...campo, ...TACTIL }}
+            >
+              <option value="todas">Público y privado</option>
+              <option value="Público">Solo público</option>
+              <option value="Privado">Solo privado</option>
+            </select>
+          </label>
+
+          <div>
+            <p className="text-[11px]" style={{ color: 'var(--gr-tinta-3)' }}>
+              Minutos andando
+            </p>
+            <div className="mt-1 grid grid-cols-3 gap-1">
+              {MINUTOS.map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => cambiar({ minutos: m })}
+                  aria-pressed={estado.minutos === m}
+                  className="gr-num rounded border px-1 text-[12px]"
+                  style={{
+                    ...TACTIL,
+                    borderColor: estado.minutos === m ? 'var(--gr-info)' : 'var(--gr-linea-fuerte)',
+                    background: estado.minutos === m ? 'var(--gr-info)' : 'var(--gr-superficie)',
+                    color: estado.minutos === m ? '#ffffff' : 'var(--gr-tinta-2)',
+                  }}
+                >
+                  {m} min
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* La mancha es la lectura; la red es la comprobacion de donde sale.
+              Por eso la red se puede encender, pero no viene encendida. */}
+          <label className="flex items-center gap-2 text-[12px]" style={{ color: 'var(--gr-tinta-2)' }}>
+            <input
+              type="checkbox"
+              checked={estado.verCalles}
+              onChange={(e) => cambiar({ verCalles: e.target.checked })}
+            />
+            Ver también las calles por donde se llega
+          </label>
+
+          {isocrona ? (
+            <>
+              <Cifras
+                items={[
+                  {
+                    t: 'habitantes dentro',
+                    v: numero(Math.round(isocrona.poblacionPorTramo.get(estado.minutos) ?? 0)),
+                  },
+                  {
+                    t: 'de los del ámbito',
+                    v: isocrona.poblacion
+                      ? `${numero(
+                          Math.round(
+                            ((isocrona.poblacionPorTramo.get(estado.minutos) ?? 0) /
+                              isocrona.poblacion) *
+                              1000,
+                          ) / 10,
+                        )} %`
+                      : '—',
+                  },
+                  { t: 'equipamientos del urbano', v: numero(isocrona.origenes) },
+                ]}
+              />
+
+              {/* De donde sale y a que se recorta son dos cosas distintas, y
+                  quien lee la cifra tiene que poder distinguirlas. */}
+              <p className="text-[11px]" style={{ color: 'var(--gr-tinta-3)' }}>
+                Medido con todos los equipamientos del urbano —también los de fuera del ámbito, que
+                siguen sirviendo a quien vive dentro— y recortado después a {ambito}.
+              </p>
+
+              <table className="gr-tabla">
+                <caption className="gr-eyebrow mb-1 text-left">Alcance por tramo</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Hasta</th>
+                    <th scope="col" className="text-right">Hectáreas</th>
+                    <th scope="col" className="text-right">Habitantes</th>
+                    <th scope="col" className="text-right">km de calle</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {MINUTOS.filter((m) => m <= estado.minutos).map((m) => (
+                    <tr key={m}>
+                      <th scope="row" className="font-normal">
+                        {/* La muestra de color es lo que ata la fila a la
+                            mancha del mapa; sin ella la tabla y el dibujo son
+                            dos cosas sueltas. */}
+                        <span className="inline-flex items-center gap-1.5">
+                          <span
+                            aria-hidden="true"
+                            className="inline-block h-2.5 w-2.5 rounded-sm"
+                            style={{
+                              background: `rgb(${colorBanda(m, MINUTOS.filter((x) => x <= estado.minutos)).slice(0, 3).join(',')})`,
+                            }}
+                          />
+                          {m} min
+                        </span>
+                      </th>
+                      <td className="gr-num text-right">
+                        {numero(Math.round(isocrona.bandas.find((b) => b.minutos === m)?.hectareas ?? 0))}
+                      </td>
+                      <td className="gr-num text-right">
+                        {numero(Math.round(isocrona.poblacionPorTramo.get(m) ?? 0))}
+                      </td>
+                      <td className="gr-num text-right">
+                        {/* El reparto por tramo es excluyente —cada calle cae
+                            en uno— y las otras dos columnas son acumuladas, asi
+                            que aqui se acumula tambien o la fila se contradice
+                            a si misma. */}
+                        {numero(
+                          Math.round(
+                            MINUTOS.filter((x) => x <= m).reduce(
+                              (s, x) => s + (isocrona.metrosPorTramo.get(x) ?? 0),
+                              0,
+                            ) / 100,
+                          ) / 10,
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {/* Las columnas son acumulativas y conviene decirlo: la fila de
+                  10 minutos incluye a quien llega en 5. */}
+              <p className="text-[11px]" style={{ color: 'var(--gr-tinta-3)' }}>
+                Cada fila incluye la anterior: lo que se alcanza en 10 minutos contiene lo que se
+                alcanza en 5.
+              </p>
+
+              {isocrona.sueltos > 0 && (
+                <p className="text-[11px]" style={{ color: 'var(--gr-tinta-3)' }}>
+                  {numero(isocrona.sueltos)} equipamientos no tienen ninguna calle cerca y quedan
+                  fuera del cálculo.
+                </p>
+              )}
+
+              {/* Una isocrona parece exacta y no lo es: conviene decir con que
+                  supuestos se dibujo. */}
+              <p className="gr-nota">
+                Distancia por calle a {numero(VELOCIDAD_M_MIN * 60 / 1000)} km/h, sobre la red de
+                OpenStreetMap. La mancha se forma ensanchando las calles alcanzables{' '}
+                {numero(ALCANCE_FUERA_DE_CALLE_M)} m a cada lado, que es lo que se anda de la
+                calzada a la puerta; por eso cubre algo más que la calle sola. No tiene en cuenta
+                la pendiente —Riobamba está a 2.750 m y sube—, ni las esperas en los cruces, ni si
+                hay vereda. Cuesta arriba, el alcance real es menor que el dibujado. Los habitantes
+                salen del Censo 2022 repartido por edificios, con reparto uniforme dentro de cada
+                barrio.
+              </p>
+            </>
+          ) : (
+            <p className="gr-nota">Calculando el alcance sobre la red de calles…</p>
+          )}
         </>
       )}
 
