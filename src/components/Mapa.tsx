@@ -483,50 +483,6 @@ export default function Mapa({
       const tinta3 = raiz.getPropertyValue('--gr-tinta-3').trim()
       const limiteBarrio = raiz.getPropertyValue('--gr-limite-barrio').trim()
 
-      /*
-       * ── Edificacion en tres dimensiones.
-       *
-       * Va la primera de todas, por debajo incluso de la coropleta: es el
-       * suelo construido sobre el que ocurre lo demas, no una capa de analisis.
-       * Arranca vacia y sin descargar nada; el GeoJSON pesa megas y solo se
-       * pide cuando alguien enciende la capa.
-       *
-       * La altura sale de OpenStreetMap: `height` cuando esta, y si no los
-       * pisos por tres metros. El 83 % del area urbana la trae, que es lo que
-       * hace que esto se parezca a Riobamba y no a un bloque plano repetido.
-       */
-      m.addSource('edificios', { type: 'geojson', data: VACIO })
-      m.addLayer({
-        id: 'edificios-3d',
-        type: 'fill-extrusion',
-        source: 'edificios',
-        layout: { visibility: 'none' },
-        paint: {
-          /*
-           * Mas alto, mas claro. Lo que no tiene dato va raso y en un tono
-           * aparte, para que se vea que es huella sin volumen y no un edificio
-           * de una planta: son dos cosas distintas y el mapa no debe
-           * confundirlas.
-           */
-          'fill-extrusion-color': [
-            'case',
-            ['!', ['get', 'medido']],
-            tinta3,
-            [
-              'interpolate',
-              ['linear'],
-              ['get', 'altura'],
-              3, raiz.getPropertyValue('--gr-s1').trim() || '#5b7d95',
-              12, raiz.getPropertyValue('--gr-s2').trim() || '#7fa8c4',
-              30, raiz.getPropertyValue('--gr-s3').trim() || '#b3cfe7',
-            ],
-          ],
-          'fill-extrusion-height': ['get', 'altura'],
-          'fill-extrusion-base': 0,
-          'fill-extrusion-opacity': 0.85,
-        },
-      })
-
       // ── Déficit de equipamiento por barrio. Se declara la primera para
       // que quede por debajo de los límites y de los puntos: es un fondo que
       // colorea el territorio, no una capa que deba taparlo.
@@ -801,6 +757,54 @@ export default function Mapa({
         paint: {
           'line-color': ['get', 'color'],
           'line-width': ['interpolate', ['linear'], ['zoom'], 11, 1.5, 16, 3.5],
+        },
+      })
+
+      /*
+       * ── Edificacion en tres dimensiones.
+       *
+       * Va por encima de las manchas del analisis y por debajo de los puntos.
+       * Estaba debajo de todo, y con un analisis abierto las coropletas —que
+       * son planas— se pintaban sobre los edificios y los dejaban lavados. En
+       * una vista en tres dimensiones el suelo se colorea y los volumenes se
+       * levantan sobre el, no al reves.
+       *
+       * Arranca vacia y sin descargar nada; el GeoJSON pesa megas y solo se
+       * pide cuando alguien enciende la capa.
+       *
+       * La altura sale de OpenStreetMap: `height` cuando esta, y si no los
+       * pisos por tres metros. El 83 % del area urbana la trae, que es lo que
+       * hace que esto se parezca a Riobamba y no a un bloque plano repetido.
+       */
+      m.addSource('edificios', { type: 'geojson', data: VACIO })
+      m.addLayer({
+        id: 'edificios-3d',
+        type: 'fill-extrusion',
+        source: 'edificios',
+        layout: { visibility: 'none' },
+        paint: {
+          /*
+           * Mas alto, mas claro. Lo que no tiene dato va raso y en un tono
+           * aparte, para que se vea que es huella sin volumen y no un edificio
+           * de una planta: son dos cosas distintas y el mapa no debe
+           * confundirlas.
+           */
+          'fill-extrusion-color': [
+            'case',
+            ['!', ['get', 'medido']],
+            tinta3,
+            [
+              'interpolate',
+              ['linear'],
+              ['get', 'altura'],
+              3, raiz.getPropertyValue('--gr-s1').trim() || '#5b7d95',
+              12, raiz.getPropertyValue('--gr-s2').trim() || '#7fa8c4',
+              30, raiz.getPropertyValue('--gr-s3').trim() || '#b3cfe7',
+            ],
+          ],
+          'fill-extrusion-height': ['get', 'altura'],
+          'fill-extrusion-base': 0,
+          'fill-extrusion-opacity': 0.85,
         },
       })
 

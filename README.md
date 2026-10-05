@@ -287,6 +287,12 @@ no un edificio de una planta.
 Pesa 1,5 MB y **se descarga la primera vez que alguien enciende la capa**, no al
 abrir el visor, igual que la red peatonal.
 
+**Va por encima de las manchas del análisis y por debajo de los puntos.** Estaba
+declarada debajo de todo, y con un análisis abierto las coropletas —que son
+planas— se pintaban sobre los edificios y los dejaban lavados. En una vista en
+tres dimensiones el suelo se colorea y los volúmenes se levantan sobre él, no al
+revés.
+
 **Descargar y poner los datos van en dos efectos separados**, y no por gusto: el
 mapa puede no tener el estilo listo cuando la descarga termina —en una pestaña
 de fondo el navegador no pinta, y sin pintar MapLibre no acaba de cargar—, y
