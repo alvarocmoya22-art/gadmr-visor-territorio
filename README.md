@@ -867,6 +867,13 @@ el campo z en los tres umbrales con la misma marcha de cuadros que usan las
 isócronas, y salen manchas anidadas que además se distinguen de un vistazo,
 cosa que un damero de cuadrados grises no hace.
 
+**El contorno se detiene en el límite del ámbito.** Las celdas de fuera llevan un
+valor muy por debajo de cualquier umbral, y no es un detalle de dibujo: con un
+cero ahí, el contorno interpolaba entre la celda de dentro y la de fuera y caía
+cerca de la de fuera, de modo que la mancha se salía del límite hasta casi una
+celda entera. Daba a entender que el análisis había mirado un territorio que no
+había mirado.
+
 **Las celdas vacías del ámbito entran en el cálculo**, y no es un detalle: la
 media y la desviación salen de ellas. Contando solo las celdas con registros,
 todo saldría caliente.

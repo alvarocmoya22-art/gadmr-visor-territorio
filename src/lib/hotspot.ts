@@ -252,11 +252,25 @@ export function calcularHotspot(
   const aLat = (gy: number) => sur + (gy - 0.5) * dLat
   const rasgos: GeoJSON.Feature[] = []
 
+  /*
+   * Fuera del ambito, un valor muy por debajo de cualquier umbral.
+   *
+   * No es un detalle de dibujo. Con un cero ahi, el contorno interpola entre la
+   * celda de dentro y la de fuera y acaba cayendo cerca de la de fuera: la
+   * mancha se salia del limite hasta casi una celda entera, y daba a entender
+   * que el analisis habia mirado un territorio que no habia mirado. Con un
+   * valor muy negativo el corte se pega al borde del ambito, que es donde el
+   * analisis termina de verdad.
+   */
+  const FUERA = -1e3
+
   for (const lado of [1, -1]) {
     // Para el lado frio se contornea el campo con el signo cambiado: d3 saca
     // siempre el recinto de «valor mayor o igual que el umbral».
     const valores = new Float64Array(campoZ.length)
-    for (let k = 0; k < campoZ.length; k++) valores[k] = campoZ[k] * lado
+    for (let k = 0; k < campoZ.length; k++) {
+      valores[k] = activa[k] ? campoZ[k] * lado : FUERA
+    }
     const generar = contours()
       .size([ancho, alto])
       .thresholds(CONFIANZA.map((c) => c.z).reverse())
