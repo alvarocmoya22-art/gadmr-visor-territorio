@@ -64,6 +64,8 @@ const CAPAS_INICIALES: CapasVisibles = {
   // Apagada al entrar: son dos megas que solo se descargan si se enciende.
   edificios: false,
   proyectos: false,
+  // Catorce megas: igual que la edificacion, solo si se pide.
+  catastro: false,
 }
 
 export default function App() {

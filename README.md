@@ -276,6 +276,39 @@ disparan a la vez, de modo que leer el ángulo a mitad de la animación lo
 congelaba en cero: con la capa encendida se toma la inclinación que le toca, no
 la que haya en ese instante.
 
+### Catastro
+
+Se enciende en **Capas del mapa → Catastro · predios**: **41.681 predios** del
+área urbana, solo en línea y solo desde el zoom 15. Sin relleno porque son
+cuarenta mil polígonos pegados unos a otros y cualquier relleno los convierte en
+una mancha —lo que se lee de un catastro es la trama, y la trama es el lindero—;
+y solo de cerca porque con la ciudad entera a la vista cuesta lo mismo y no se
+distingue un predio de otro. Pesa 14 MB en claro, 1,7 MB al viajar comprimido,
+y se descarga la primera vez que alguien lo enciende.
+
+**Del shapefile no sale el nombre del propietario.** El origen lo trae, predio a
+predio, junto con números de trámite y de adjudicación. Este repositorio es
+público: publicar eso sería poner en línea un registro de quién posee qué en
+todo el cantón. Se publica la geometría, la clave catastral, la superficie y el
+estado —el plano catastral, que es documento público— y `scripts/catastro.py`
+comprueba al terminar que ninguno de los campos reservados se ha colado en el
+archivo. Si algún día hace falta el propietario en pantalla, no es cuestión de
+añadir la columna: hay que servirlo desde un sitio con control de acceso.
+
+Tres cosas que el origen trae y el script arregla al pasar:
+
+- **Quince predios vienen en UTM** aunque el `.prj` declare WGS84. Se detectan
+  por magnitud —una abscisa en grados nunca pasa de 180— y se reproyectan.
+- **224 geometrías inválidas**: anillos que se cruzan y huecos sin contorno al
+  que pertenecer. Se reparan antes de redondear coordenadas, porque redondear
+  un polígono roto lo rompe más.
+- **Un valor de texto con un carácter multibyte partido por la mitad**, truncado
+  al ancho fijo del DBF, que revienta la lectura. Como está en uno de los campos
+  reservados, el script lee solo las columnas que va a publicar y ni lo toca.
+
+De los 75.144 predios del cantón se publican los 41.681 que caen dentro de las
+18 plataformas; los 33.273 rurales no se dibujarían nunca en este visor.
+
 ### Buscador de calles
 
 Escribir el nombre de una calle dice **por qué plataformas pasa**, encuadra el

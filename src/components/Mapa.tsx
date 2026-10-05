@@ -72,6 +72,8 @@ export interface CapasVisibles {
   edificios: boolean
   /** Dónde van los proyectos del plan de 2026. */
   proyectos: boolean
+  /** Linderos de predio del catastro municipal. */
+  catastro: boolean
 }
 
 interface Props {
@@ -698,6 +700,31 @@ export default function Mapa({
       }
 
       // ── Puntos OSM
+      /*
+       * ── Catastro: linderos de predio.
+       *
+       * Solo linea, sin relleno: son cuarenta mil predios pegados unos a otros
+       * y cualquier relleno los convierte en una mancha. Lo que se lee de un
+       * catastro es la trama, y la trama es el lindero.
+       *
+       * Y solo de cerca. Dibujar cuarenta mil poligonos con la ciudad entera a
+       * la vista cuesta lo mismo y no se distingue un predio de otro: a esa
+       * escala la respuesta correcta es no dibujarlos.
+       */
+      m.addSource('catastro', { type: 'geojson', data: VACIO })
+      m.addLayer({
+        id: 'catastro-linea',
+        type: 'line',
+        source: 'catastro',
+        minzoom: 15,
+        layout: { visibility: 'none', 'line-join': 'round' },
+        paint: {
+          'line-color': tinta3,
+          'line-width': ['interpolate', ['linear'], ['zoom'], 15, 0.4, 17, 0.8, 19, 1.4],
+          'line-opacity': ['interpolate', ['linear'], ['zoom'], 15, 0.35, 17, 0.75],
+        },
+      })
+
       /*
        * ── Isocrona a pie.
        *
@@ -1424,6 +1451,42 @@ export default function Mapa({
   }, [edificiosListos, mapaListo])
 
   /*
+   * El catastro son catorce megas en claro —menos de dos al viajar comprimido—
+   * y se descarga la primera vez que alguien lo enciende, igual que la
+   * edificacion y la red peatonal.
+   */
+  const catastroGeo = useRef<GeoJSON.FeatureCollection | null>(null)
+  const [catastroListo, setCatastroListo] = useState(false)
+
+  useEffect(() => {
+    if (!capas.catastro || catastroGeo.current) return
+    let vivo = true
+    void (async () => {
+      try {
+        const resp = await fetch(`${import.meta.env.BASE_URL}datos/catastro.geojson`, {
+          cache: 'force-cache',
+        })
+        if (!resp.ok || !vivo) return
+        catastroGeo.current = (await resp.json()) as GeoJSON.FeatureCollection
+        if (vivo) setCatastroListo(true)
+      } catch {
+        // Sin catastro el visor sigue entero; no hay nada que avisar.
+      }
+    })()
+    return () => {
+      vivo = false
+    }
+  }, [capas.catastro])
+
+  useEffect(() => {
+    if (!catastroListo || !catastroGeo.current) return
+    cuandoListo((m) => {
+      const fuente = m.getSource('catastro') as maplibregl.GeoJSONSource | undefined
+      if (fuente && catastroGeo.current) fuente.setData(catastroGeo.current)
+    })
+  }, [catastroListo, mapaListo])
+
+  /*
    * Al encender la capa se inclina la camara. Un modelo en tres dimensiones
    * visto en planta es un mapa de manchas: sin inclinar no se ve lo unico que
    * esta capa aporta.
@@ -1458,6 +1521,7 @@ export default function Mapa({
       poner('equipamientos', capas.equipamientos)
       poner('edificios-3d', capas.edificios)
       poner('proyectos', capas.proyectos)
+      poner('catastro-linea', capas.catastro)
       poner('proyectos-icono', capas.proyectos)
       poner('proyectos-etiqueta', capas.proyectos)
       poner('calor-registros', mapaCalor === 'registros')
