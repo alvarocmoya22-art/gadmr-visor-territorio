@@ -154,6 +154,30 @@ Y cuando no hay registros cargados —los espejos de Overpass fallan a ratos— 
 tarjeta dice «sin registros de OpenStreetMap cargados» en vez de «0,0 %». No
 tener dato y tener dato sin verificar son dos cosas distintas.
 
+### Dos barrios pueden llamarse igual
+
+En la capa municipal hay **nueve nombres repetidos** —dos «24 DE MAYO», dos «LA
+MERCED», dos «SAN FRANCISCO», dos «SANTA FAZ»…— y no son dos piezas de un mismo
+barrio: están entre **600 m y 5 km** unos de otros. Son barrios distintos que se
+llaman igual, que es lo más normal en una ciudad.
+
+El visor los agrupaba por nombre, y eso los convertía en un barrio imposible:
+dos trozos en dos puntos de la ciudad, un centro en medio de la nada y **una
+sola cifra de población para los dos**. Los 1.653 habitantes de «24 DE MAYO»
+eran en realidad 1.398 de uno y 256 del otro, y el visor enseñaba 1.653 en los
+dos sitios.
+
+`numero` tampoco sirve de clave: **dieciséis barrios distintos comparten el
+183**. Lo único estable que trae la capa es el orden de sus rasgos, así que la
+identidad del barrio es su posición en `barrios.geojson`, y por ahí se une con
+la población. Si se regenera `barrios.geojson` hay que regenerar también
+`poblacion.json`.
+
+Para la pantalla, los homónimos llevan su plataforma detrás: **«24 DE MAYO · C»**
+y **«24 DE MAYO · D»**, que es lo que de verdad los distingue para quien trabaja
+aquí. Las piezas de verdad —un barrio partido por una quebrada— ya venían como
+MultiPolygon en un único rasgo y esas se siguen uniendo solas; son tres.
+
 ## Los espejos de Overpass no van sincronizados
 
 Esto causó el problema más difícil de ver de todo el proyecto: **la misma

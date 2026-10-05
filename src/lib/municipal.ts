@@ -19,6 +19,14 @@ export interface Plataforma {
 }
 
 export interface Barrio {
+  /**
+   * Identidad del barrio: su posicion en `barrios.geojson`.
+   *
+   * El nombre no sirve —hay nueve repetidos— y `numero` tampoco: dieciseis
+   * barrios distintos comparten el 183. Lo unico estable que trae la capa es el
+   * orden de sus rasgos, y por ahi se une con la poblacion.
+   */
+  id: number
   nombre: string
   areaHa: number
   poligonos: Anillo[][]
@@ -209,35 +217,61 @@ function nombrarBarrios(fc: GeoJSON.FeatureCollection): void {
 const areaDe = (p: Record<string, unknown>): number =>
   Number(p.area_ha_geom ?? p.area_ha ?? 0)
 
-/** Un barrio por nombre: las piezas sueltas del mismo barrio se unen. */
+/**
+ * Un barrio por rasgo de la capa.
+ *
+ * Antes se agrupaban por nombre, dando por hecho que dos rasgos con el mismo
+ * nombre eran dos piezas de un mismo barrio. No lo son: los nueve nombres
+ * repetidos de la capa estan entre 600 m y 5 km unos de otros. Son barrios
+ * distintos que se llaman igual, y hay dos «24 DE MAYO», dos «LA MERCED», dos
+ * «SAN FRANCISCO»...
+ *
+ * Agruparlos los convertia en un barrio imposible, con dos trozos en dos puntos
+ * de la ciudad, un centro en medio de la nada y una sola cifra de poblacion para
+ * los dos. Las piezas de verdad —un barrio partido por una quebrada— ya vienen
+ * como MultiPolygon en un unico rasgo, y esas se siguen uniendo solas.
+ */
 function aBarrios(fc: GeoJSON.FeatureCollection): Barrio[] {
-  const porNombre = new Map<string, Barrio>()
-  for (const f of fc.features) {
-    const p = f.properties ?? {}
-    const nombre = String(p.nombre ?? 'Sin nombre')
-    const poligonos = poligonosDe(f.geometry)
-    const ya = porNombre.get(nombre)
-    if (ya) {
-      ya.poligonos.push(...poligonos)
-      ya.areaHa += areaDe(p)
-      ya.caja = cajaDe(ya.poligonos.flat())
-      ya.piezas++
-    } else {
-      porNombre.set(nombre, {
-        nombre,
+  return fc.features
+    .map((f, id) => {
+      const p = f.properties ?? {}
+      const poligonos = poligonosDe(f.geometry)
+      return {
+        id,
+        nombre: String(p.nombre ?? 'Sin nombre'),
         areaHa: areaDe(p),
         poligonos,
         caja: cajaDe(poligonos.flat()),
-        piezas: 1,
-        centro: [0, 0], // se rellena al terminar de unir las piezas
+        piezas: poligonos.length,
+        centro: [0, 0] as [number, number],
         plataforma: null,
         pob: 0,
         viv: 0,
         pobServB: 0,
-      })
-    }
+      }
+    })
+    .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
+}
+
+/**
+ * Nombres unicos, para que el filtro y las tablas puedan nombrar a uno solo.
+ *
+ * Se anade la plataforma, que es lo que de verdad los distingue para quien
+ * trabaja aqui: «24 DE MAYO · D» y «24 DE MAYO · G» son dos sitios y asi se
+ * leen. Si dos homonimos cayeran ademas en la misma plataforma, se numeran.
+ */
+function desambiguar(barrios: Barrio[]): void {
+  const cuantos = new Map<string, number>()
+  for (const b of barrios) cuantos.set(b.nombre, (cuantos.get(b.nombre) ?? 0) + 1)
+
+  const usados = new Map<string, number>()
+  for (const b of barrios) {
+    if ((cuantos.get(b.nombre) ?? 0) < 2) continue
+    const base = b.plataforma ? `${b.nombre} · ${b.plataforma}` : b.nombre
+    const vistos = (usados.get(base) ?? 0) + 1
+    usados.set(base, vistos)
+    b.nombre = vistos > 1 ? `${base} (${vistos})` : base
   }
-  return [...porNombre.values()].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
 }
 
 function aPlataformas(fc: GeoJSON.FeatureCollection): Plataforma[] {
@@ -380,13 +414,17 @@ export async function cargarCapas(): Promise<CapasMunicipales> {
   for (const b of barriosLista) {
     b.centro = puntoInterior(b.poligonos)
     b.plataforma = plataformaDe(b.centro[0], b.centro[1], plataformas)
-    const censo = poblacion?.barrios[b.nombre]
+    // Por identidad y no por nombre: con el nombre, los dos «24 DE MAYO»
+    // recibian la misma cifra y la ciudad sumaba habitantes que no existen.
+    const censo = poblacion?.barrios[String(b.id)]
     if (censo) {
       b.pob = censo.pob
       b.viv = censo.viv
       b.pobServB = censo.pobServB
     }
   }
+  // Despues de saber la plataforma de cada uno, porque es lo que los separa.
+  desambiguar(barriosLista)
 
   const equipamientos: EquipamientoMunicipal[] = equipamientosGeo.features.map((f, i) => {
     const p = f.properties ?? {}

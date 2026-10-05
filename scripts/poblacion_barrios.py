@@ -85,21 +85,26 @@ barrios = gpd.read_file(f"{BASE}/barrios.geojson").to_crs(M)
 plataformas = gpd.read_file(f"{BASE}/plataformas.geojson").to_crs(M)
 log(f"  barrios: {len(barrios)}  ·  plataformas: {len(plataformas)}")
 
-# Los barrios llegan partidos en piezas; el visor los agrupa por nombre y aqui
-# se hace igual, para que las dos listas hablen de los mismos barrios.
+# Cada rasgo es un barrio, y se identifica por su posicion en el archivo.
+#
+# Agrupar por nombre era un error: nueve nombres estan repetidos en la capa
+# —dos «24 DE MAYO», dos «LA MERCED», dos «SAN FRANCISCO»...— y son barrios
+# distintos, de 600 m a 5 km unos de otros. Al agruparlos, los dos recibian una
+# sola cifra de poblacion y el visor la mostraba dos veces. `numero` tampoco
+# vale de clave: dieciseis barrios comparten el 183.
+#
+# El visor hace lo mismo y lee esta misma posicion, asi que si se regenera
+# `barrios.geojson` hay que regenerar tambien este archivo.
 barrios["nombre"] = barrios["nombre"].fillna("Sin nombre")
-sin_nombre = barrios["nombre"].isin(["", "Sin nombre"])
-barrios.loc[sin_nombre, "nombre"] = "Sin nombre (n.º " + barrios.loc[sin_nombre, "numero"].astype(
-    "Int64"
-).astype(str) + ")"
+barrios["bid"] = range(len(barrios))
 
 edif_barrio = gpd.sjoin(
-    edif, barrios[["nombre", "geometry"]], how="left", predicate="within"
+    edif, barrios[["bid", "nombre", "geometry"]], how="left", predicate="within"
 ).drop(columns="index_right")
 
 agg = (
-    edif_barrio.dropna(subset=["nombre"])
-    .groupby("nombre")
+    edif_barrio.dropna(subset=["bid"])
+    .groupby("bid")
     .agg(
         pob=("pob_edif", "sum"),
         viv=("viv_edif", "sum"),
@@ -112,14 +117,14 @@ agg = (
 if len(vacios):
     trozos = gpd.overlay(
         vacios[["sec_id", "pob_t", "v_pres", "pob_serv_b", "geometry"]],
-        barrios[["nombre", "geometry"]],
+        barrios[["bid", "geometry"]],
         how="intersection",
         keep_geom_type=True,
     )
     if len(trozos):
         areas = vacios.set_index("sec_id").geometry.area
         trozos["frac"] = trozos.geometry.area / trozos["sec_id"].map(areas)
-        extra = trozos.groupby("nombre").apply(
+        extra = trozos.groupby("bid").apply(
             lambda g: pd.Series(
                 {
                     "pob": (g["pob_t"] * g["frac"]).sum(),
@@ -142,6 +147,8 @@ por_plat = (
     .agg(pob=("pob_edif", "sum"), viv=("viv_edif", "sum"))
 )
 
+nombres = dict(zip(barrios["bid"], barrios["nombre"]))
+
 # ---------------------------------------------------------------- cuadre
 pob_canton = float(sec["pob_t"].sum())
 pob_barrios = float(agg["pob"].sum())
@@ -155,14 +162,17 @@ salida = {
     "fuente": "INEC · Censo de Poblacion y Vivienda 2022, sectores censales anonimizados",
     "metodo": "reparto dasimetrico por edificios de la Geodatabase Nacional 2024 (INEC)",
     "canton": {"pob": round(pob_canton), "sectores": len(sec)},
+    # La clave es la posicion del barrio en `barrios.geojson`; el nombre va
+    # dentro solo para poder leer el archivo a ojo.
     "barrios": {
-        n: {
+        str(int(bid)): {
+            "nombre": nombres.get(int(bid), ""),
             "pob": round(r["pob"]),
             "viv": round(r["viv"]),
             "pobServB": round(r["pob_serv_b"]),
             "edificios": int(r["edificios"]),
         }
-        for n, r in agg.iterrows()
+        for bid, r in agg.iterrows()
         if round(r["pob"]) > 0
     },
     "plataformas": {
