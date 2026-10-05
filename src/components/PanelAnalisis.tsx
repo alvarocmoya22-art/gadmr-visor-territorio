@@ -3,6 +3,7 @@ import { numero, porcentaje } from '../lib/format'
 import type { Cruce, Deficit, Hallazgo } from '../lib/analisis'
 import { EQUIVALENTE_OSM, type Cobertura, type FuenteCobertura, type Gestion } from '../lib/cobertura'
 import { claveNivel, nivelesMedibles, CITA_NORMA, NORMA } from '../lib/norma'
+import { CELDAS_HOTSPOT, TODA_LA_CATEGORIA, type Hotspot } from '../lib/hotspot'
 
 /**
  * Qué se está analizando. Uno a la vez, a propósito.
@@ -12,7 +13,13 @@ import { claveNivel, nivelesMedibles, CITA_NORMA, NORMA } from '../lib/norma'
  * categorías, o se revisa la cola de verificación. Con un solo selector,
  * además, los que no están a la vista dejan de calcularse.
  */
-export type Analisis = 'ninguno' | 'distancia' | 'cobertura' | 'cruce' | 'inventario'
+export type Analisis =
+  | 'ninguno'
+  | 'distancia'
+  | 'cobertura'
+  | 'cruce'
+  | 'inventario'
+  | 'hotspot'
 
 /** Lo que el usuario ha elegido analizar. Vive en App y se pasa entero. */
 export interface EstadoAnalisis {
@@ -33,6 +40,12 @@ export interface EstadoAnalisis {
   umbral: number
   /** Categoría de la que se listan los registros no inventariados. */
   hallazgos: ClaveCategoria
+  /** Categoría del punto caliente; de ella salen las subcategorías. */
+  hotCategoria: ClaveCategoria
+  /** La subcategoría concreta, p. ej. «shop=car_repair». Una por análisis. */
+  hotClase: string
+  /** Lado de la celda del análisis, en metros. */
+  hotCelda: number
 }
 
 export const ANALISIS_INICIAL: EstadoAnalisis = {
@@ -46,6 +59,10 @@ export const ANALISIS_INICIAL: EstadoAnalisis = {
   b: 'salud',
   umbral: 500,
   hallazgos: 'salud',
+  hotCategoria: 'comercio',
+  // Se abre con la categoria entera: lo general primero.
+  hotClase: TODA_LA_CATEGORIA,
+  hotCelda: 150,
 }
 
 const OPCIONES: { clave: Analisis; rotulo: string }[] = [
@@ -54,6 +71,18 @@ const OPCIONES: { clave: Analisis; rotulo: string }[] = [
   { clave: 'cobertura', rotulo: 'Cobertura por radio de la ordenanza' },
   { clave: 'cruce', rotulo: 'Cruce de dos categorías' },
   { clave: 'inventario', rotulo: 'Levantado en OSM y no inventariado' },
+  { clave: 'hotspot', rotulo: 'Puntos calientes de una subcategoría' },
+]
+
+
+/** Confianza de Gi*: frio a la izquierda, caliente a la derecha. */
+const TRAMOS_HOTSPOT = [
+  { color: '#2c6fb5', rotulo: 'frío 99 %' },
+  { color: '#7fa8c4', rotulo: '95 %' },
+  { color: '#c5d7e4', rotulo: '90 %' },
+  { color: '#f2c9a0', rotulo: '90 %' },
+  { color: '#e08a4a', rotulo: '95 %' },
+  { color: '#c0453b', rotulo: 'caliente 99 %' },
 ]
 
 /** Tramos de las escalas; los colores son los de las capas del mapa. */
@@ -87,6 +116,9 @@ interface Props {
   servicios: { servicios: unknown[]; deGadm: number; deOsm: number }
   cruce: Cruce | null
   hallazgos: Hallazgo[]
+  /** Subcategorías de la categoría elegida, con cuántas de cada una. */
+  clases: { clase: string; n: number }[]
+  hotspot: Hotspot | null
   /** Ámbito sobre el que se calcula todo, para decirlo en los rótulos. */
   ambito: string
   onElegirBarrio: (nombre: string) => void
@@ -182,6 +214,8 @@ export default function PanelAnalisis({
   servicios,
   cruce,
   hallazgos,
+  clases,
+  hotspot,
   ambito,
   onElegirBarrio,
   onElegirPunto,
@@ -319,6 +353,126 @@ export default function PanelAnalisis({
                 }))}
               />
             </>
+          )}
+        </div>
+      )}
+
+
+      {/* ─────────────────────────── puntos calientes (Gi*) */}
+      {analisis.activo === 'hotspot' && (
+        <div className="space-y-2">
+          <label className="block text-[11px]" style={{ color: 'var(--gr-tinta-3)' }}>
+            Categoría
+            <select
+              value={analisis.hotCategoria}
+              onChange={(e) =>
+                cambiar({
+                  hotCategoria: e.target.value as ClaveCategoria,
+                  hotClase: TODA_LA_CATEGORIA,
+                })
+              }
+              className="mt-0.5 w-full rounded border px-2 py-1.5 text-[13px]"
+              style={campo}
+            >
+              {CATEGORIAS.map((c) => (
+                <option key={c.clave} value={c.clave}>
+                  {c.rotulo}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="block text-[11px]" style={{ color: 'var(--gr-tinta-3)' }}>
+            Subcategoría · una por análisis
+            <select
+              value={analisis.hotClase}
+              onChange={(e) => cambiar({ hotClase: e.target.value })}
+              className="mt-0.5 w-full rounded border px-2 py-1.5 text-[13px]"
+              style={campo}
+            >
+              <option value={TODA_LA_CATEGORIA}>
+                Toda la categoría · {numero(clases.reduce((n, c) => n + c.n, 0))}
+              </option>
+              {clases.map((c) => (
+                <option key={c.clase} value={c.clase}>
+                  {c.clase} · {numero(c.n)}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <div>
+            <p className="text-[11px]" style={{ color: 'var(--gr-tinta-3)' }}>
+              Tamaño de celda
+            </p>
+            <div className="mt-1 grid grid-cols-3 gap-1">
+              {CELDAS_HOTSPOT.map((m: number) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => cambiar({ hotCelda: m })}
+                  aria-pressed={analisis.hotCelda === m}
+                  className="gr-num rounded border px-1 py-1.5 text-[12px]"
+                  style={{
+                    borderColor:
+                      analisis.hotCelda === m ? 'var(--gr-info)' : 'var(--gr-linea-fuerte)',
+                    background: analisis.hotCelda === m ? 'var(--gr-info)' : 'var(--gr-superficie)',
+                    color: analisis.hotCelda === m ? '#ffffff' : 'var(--gr-tinta-2)',
+                  }}
+                >
+                  {m} m
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <Escala tramos={TRAMOS_HOTSPOT} />
+
+          {hotspot ? (
+            <>
+              <table className="gr-tabla">
+                <caption className="gr-eyebrow mb-1 text-left">Celdas con significación</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Qué</th>
+                    <th scope="col" className="text-right">Celdas</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <th scope="row" className="font-normal">Punto caliente</th>
+                    <td className="gr-num text-right">{numero(hotspot.calientes)}</td>
+                  </tr>
+                  <tr>
+                    <th scope="row" className="font-normal">Punto frío</th>
+                    <td className="gr-num text-right">{numero(hotspot.frias)}</td>
+                  </tr>
+                  <tr>
+                    <th scope="row" className="font-normal">Analizadas</th>
+                    <td className="gr-num text-right">{numero(hotspot.celdasAnalizadas)}</td>
+                  </tr>
+                </tbody>
+              </table>
+
+              {/* Un Gi* alto no significa que ahi haya mas comercio, sino que
+                  hay mas mapeado. Con el levantamiento al 16 % verificado eso
+                  no es un matiz. */}
+              <p className="gr-nota">
+                Getis-Ord Gi* sobre celdas de {numero(hotspot.celdaM)} m, con vecindad de{' '}
+                {numero(hotspot.bandaM)} m. Mide concentración frente al azar, no cantidad: un
+                punto caliente es donde hay <b>más de lo que cabría esperar</b>. Las celdas sin
+                registros del ámbito entran en el cálculo, porque de ellas sale la media.
+              </p>
+              <p className="gr-nota gr-nota--aviso">
+                Mide <b>dónde está mapeado</b>, no dónde está. Un racimo puede ser un racimo de
+                comercios o un racimo de trabajo de campo.
+              </p>
+            </>
+          ) : (
+            <p className="gr-nota">
+              No hay suficientes registros en el ámbito para contrastar nada: Gi* necesita
+              repartir unos cuantos sobre bastantes celdas antes de poder decir si se apiñan.
+            </p>
           )}
         </div>
       )}

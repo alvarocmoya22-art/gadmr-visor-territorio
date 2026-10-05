@@ -31,7 +31,9 @@ import { descargarCsv, descargarGeoJSON, descargarShapefile } from './lib/export
 import { barriosDe, calcularDeficit, cruzar, hallazgosACsv, sinInventariar } from './lib/analisis'
 import { distanciaM } from './lib/geo'
 import { calcularCobertura, elementosDe, serviciosDe, tiposDisponibles } from './lib/cobertura'
+import { POR_CLAVE } from './lib/categorias'
 import { claveNivel, nivelDe, nivelInicial } from './lib/norma'
+import { calcularHotspot, clasesDe } from './lib/hotspot'
 /*
  * Solo los tipos: `import type` no deja nada en el paquete, asi que el modulo
  * de isocronas y los dos megas de la red siguen cargandose con `import()` solo
@@ -595,6 +597,42 @@ export default function App() {
   })()
 
   /**
+   * Las subcategorias de la categoria elegida: «shop=car_repair» y companía.
+   * Salen del ambito, no del canton, para que el selector no ofrezca una clase
+   * que aqui no existe.
+   */
+  const clasesHotspot = useMemo(
+    () => clasesDe(ambito, analisis.hotCategoria),
+    [ambito, analisis.hotCategoria],
+  )
+
+  /**
+   * Puntos calientes de esa subcategoria, por Gi*.
+   *
+   * Se recorta al mismo ambito que todo lo demas. Devuelve null cuando no hay
+   * con que contrastar —pocas celdas o ni un registro—, y entonces el panel lo
+   * dice en vez de pintar un mapa vacio.
+   */
+  const hotspot = useMemo(() => {
+    if (analisis.activo !== 'hotspot' || !analisis.hotClase) return null
+    return calcularHotspot(
+      ambito,
+      recorte.piezas,
+      analisis.hotCategoria,
+      analisis.hotClase,
+      analisis.hotCelda,
+      POR_CLAVE.get(analisis.hotCategoria)?.rotulo ?? analisis.hotCategoria,
+    )
+  }, [
+    analisis.activo,
+    analisis.hotCategoria,
+    analisis.hotClase,
+    analisis.hotCelda,
+    ambito,
+    recorte.piezas,
+  ])
+
+  /**
    * Lo que dice la franja de indicadores segun la pestana abierta.
    *
    * Hasta aqui la franja decia siempre lo mismo —el estado del levantamiento—
@@ -686,6 +724,36 @@ export default function App() {
               rotulo: 'Quedan fuera',
               pie: 'resaltados en el mapa',
               tono: cruce.desatendidos.length > 0 ? 'aviso' : 'ok',
+            },
+          ],
+        }
+      }
+      if (hotspot) {
+        const pct = hotspot.registros
+          ? (hotspot.registrosEnCaliente / hotspot.registros) * 100
+          : 0
+        return {
+          titulo: `Puntos calientes · ${hotspot.rotulo}`,
+          tarjetas: [
+            {
+              valor: numero(hotspot.calientes),
+              rotulo: 'Celdas en punto caliente',
+              pie: `de ${numero(hotspot.celdasAnalizadas)} analizadas · celda de ${numero(hotspot.celdaM)} m`,
+            },
+            {
+              valor: porcentaje(pct),
+              rotulo: 'De los registros, ahi dentro',
+              pie: `${numero(Math.round(hotspot.registrosEnCaliente))} de ${numero(hotspot.registros)} con 95 % o mas`,
+            },
+            {
+              valor: numero(hotspot.zMaximo),
+              rotulo: 'Puntuacion z maxima',
+              pie: 'desviaciones tipicas sobre la media del ambito',
+            },
+            {
+              valor: numero(hotspot.frias),
+              rotulo: 'Celdas en punto frio',
+              pie: 'menos de lo que cabria esperar',
             },
           ],
         }
@@ -790,6 +858,7 @@ export default function App() {
     cobertura,
     cruce,
     hallazgos,
+    hotspot,
     analisis.activo,
     analisis.tipo,
     equipAmbito,
@@ -1100,6 +1169,7 @@ export default function App() {
                 : null
             }
             capas={capas}
+            hotspot={hotspot?.geo ?? null}
             onSeleccionar={elegirPunto}
             onSeleccionarEquipamiento={elegirEquipamiento}
             onFotoCercana={setFotoRespaldo}
@@ -1189,6 +1259,8 @@ export default function App() {
                 servicios={servicios}
                 cruce={cruce}
                 hallazgos={hallazgos}
+                clases={clasesHotspot}
+                hotspot={hotspot}
                 ambito={ambitoRotulo}
                 onElegirBarrio={elegirBarrio}
                 onElegirPunto={elegirPunto}

@@ -83,6 +83,8 @@ interface Props {
   seleccionado: Punto | null
   plataformaActiva: string | null
   capas: CapasVisibles
+  /** Celdas con significacion de Gi*; null si no hay analisis activo. */
+  hotspot: GeoJSON.FeatureCollection | null
   onSeleccionar: (id: string | null) => void
   onSeleccionarEquipamiento: (id: string) => void
   onFotoMapillary: (id: string, lon: number, lat: number) => void
@@ -398,6 +400,7 @@ export default function Mapa({
   seleccionado,
   plataformaActiva,
   capas,
+  hotspot,
   onSeleccionar,
   onSeleccionarEquipamiento,
   onFotoMapillary,
@@ -722,6 +725,36 @@ export default function Mapa({
           'line-color': tinta3,
           'line-width': ['interpolate', ['linear'], ['zoom'], 15, 0.4, 17, 0.8, 19, 1.4],
           'line-opacity': ['interpolate', ['linear'], ['zoom'], 15, 0.35, 17, 0.75],
+        },
+      })
+
+      /*
+       * ── Puntos calientes (Gi*).
+       *
+       * Divergente de frio a caliente, con el centro vacio: lo que no llega al
+       * 90 % de confianza no se dibuja. Pintar de un color palido lo que no es
+       * significativo invita a leerlo como «un poco caliente», y no lo es: es
+       * indistinguible del azar.
+       */
+      m.addSource('hotspot', { type: 'geojson', data: VACIO })
+      m.addLayer({
+        id: 'hotspot-relleno',
+        type: 'fill',
+        source: 'hotspot',
+        layout: { visibility: 'none' },
+        paint: {
+          'fill-color': [
+            'match',
+            ['get', 'grado'],
+            -3, '#2c6fb5',
+            -2, '#7fa8c4',
+            -1, '#c5d7e4',
+            1, '#f2c9a0',
+            2, '#e08a4a',
+            3, '#c0453b',
+            tinta3,
+          ],
+          'fill-opacity': 0.55,
         },
       })
 
@@ -1238,6 +1271,13 @@ export default function Mapa({
     })
   }, [espacial, mapaListo])
 
+  // Celdas del analisis de puntos calientes.
+  useEffect(() => {
+    cuandoListo((m) => {
+      ;(m.getSource('hotspot') as maplibregl.GeoJSONSource | undefined)?.setData(hotspot ?? VACIO)
+    })
+  }, [hotspot, mapaListo])
+
   // Coropleta del déficit: se recalcula fuera y aquí solo se dibuja.
   useEffect(() => {
     cuandoListo((m) => {
@@ -1537,6 +1577,7 @@ export default function Mapa({
       poner('isocrona-borde', hayIsocrona)
       poner('isocrona-calles-linea', hayIsocrona && espacial.verCalles)
       poner('cruce-alerta', cruce !== null && capas.osm)
+      poner('hotspot-relleno', hotspot !== null)
 
       /*
        * Opacidad de los puntos. Son tres situaciones y una sola propiedad:
@@ -1561,7 +1602,7 @@ export default function Mapa({
         r.getElement().style.display = capas.plataformas ? '' : 'none'
       }
     })
-  }, [capas, mapaCalor, deficit, cobertura, alcance, cruce, mapaListo, espacial])
+  }, [capas, mapaCalor, deficit, cobertura, alcance, cruce, hotspot, mapaListo, espacial])
 
   /**
    * Plataforma activa: se rellena, se engruesa su contorno, las demás se

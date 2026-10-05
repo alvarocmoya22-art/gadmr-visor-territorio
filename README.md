@@ -815,6 +815,47 @@ cantonal no aparece», que mandaba a buscar un control inexistente; ahora lo
 explica y remite a lo que sí se puede medir sin radio normativo: los **minutos
 andando** del escenario de isócronas.
 
+### Puntos calientes: por qué Gi* y no otro mapa de calor
+
+El visor ya tenía mapas de calor, y un mapa de calor dice **dónde hay muchos**.
+Eso no es un punto caliente. Un punto caliente es donde hay **más de lo que
+cabría esperar por azar**, y para afirmarlo hace falta un contraste: dos barrios
+con el mismo número de talleres no son lo mismo si uno los tiene apiñados en
+tres cuadras y el otro repartidos.
+
+El análisis trabaja sobre las **subcategorías de OpenStreetMap** —`shop=car_repair`,
+`shop=hardware`, `amenity=pharmacy`…—, una por análisis, y aplica Getis-Ord Gi*
+sobre una rejilla recortada al ámbito:
+
+    Gi* = ( Σ wij·xj − X̄·Σ wij ) / ( S · √[ (n·Σ wij² − (Σ wij)²) / (n−1) ] )
+
+`w` vale 1 dentro de la banda de vecindad —la propia celda incluida, que es lo
+que marca la estrella— y 0 fuera. El resultado es una puntuación z, y solo se
+dibuja lo que pasa del 90 % de confianza: pintar de un color pálido lo que no es
+significativo invita a leerlo como «un poco caliente», y no lo es, es
+indistinguible del azar.
+
+**No se dibujan los cuadrados de la rejilla, sino el contorno del campo.** El
+análisis es por celda —Gi* necesita una vecindad contable— pero la celda es el
+instrumento, no la respuesta: pintar el cuadrado hace creer que el punto
+caliente termina en ese borde, y lo que termina ahí es la rejilla. Se contornea
+el campo z en los tres umbrales con la misma marcha de cuadros que usan las
+isócronas, y salen manchas anidadas que además se distinguen de un vistazo,
+cosa que un damero de cuadrados grises no hace.
+
+**Las celdas vacías del ámbito entran en el cálculo**, y no es un detalle: la
+media y la desviación salen de ellas. Contando solo las celdas con registros,
+todo saldría caliente.
+
+Con `shop=car_repair` y celda de 150 m salen **96 celdas calientes de 1.315
+analizadas**, repartidas en **tres manchas**, con el **76 % de los talleres
+dentro** y un z máximo de 14: no es una tendencia, son tres corredores.
+
+**Lo que esto no sabe, y la pantalla lo dice cada vez:** mide dónde está
+mapeado, no dónde está. Con el levantamiento al 16 % verificado, un racimo puede
+ser un racimo de comercios o un racimo de trabajo de campo. Gi* distingue
+concentración de azar; no distingue realidad de esfuerzo de encuesta.
+
 ### El nivel no es solo un número, también elige qué se cuenta
 
 El radio barrial de 400 m es el de la escuela, no el de la universidad. Desde el
