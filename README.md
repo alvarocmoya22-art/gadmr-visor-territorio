@@ -875,6 +875,13 @@ Con `shop=car_repair` y celda de 150 m salen **96 celdas calientes de 1.315
 analizadas**, repartidas en **tres manchas**, con el **76 % de los talleres
 dentro** y un z máximo de 14: no es una tendencia, son tres corredores.
 
+**Mientras hay un análisis abierto, el mapa enseña los puntos con los que se
+está calculando**, en blanco y por delante de todo lo demás: los equipamientos
+que cuentan como servicio en la cobertura, los registros de la subcategoría en
+el punto caliente, los hallazgos en el inventario. Un mapa de manchas sin los
+puntos que las producen pide un acto de fe, y además así se ve cuando una mancha
+nace de cuatro registros y no de cuarenta.
+
 **Lo que esto no sabe, y la pantalla lo dice cada vez:** mide dónde está
 mapeado, no dónde está. Con el levantamiento al 16 % verificado, un racimo puede
 ser un racimo de comercios o un racimo de trabajo de campo. Gi* distingue

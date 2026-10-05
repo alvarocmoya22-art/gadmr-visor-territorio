@@ -85,6 +85,8 @@ interface Props {
   capas: CapasVisibles
   /** Celdas con significacion de Gi*; null si no hay analisis activo. */
   hotspot: GeoJSON.FeatureCollection | null
+  /** Los puntos con los que se esta calculando; null si no hay analisis. */
+  puntosAnalisis: GeoJSON.FeatureCollection | null
   onSeleccionar: (id: string | null) => void
   onSeleccionarEquipamiento: (id: string) => void
   onFotoMapillary: (id: string, lon: number, lat: number) => void
@@ -401,6 +403,7 @@ export default function Mapa({
   plataformaActiva,
   capas,
   hotspot,
+  puntosAnalisis,
   onSeleccionar,
   onSeleccionarEquipamiento,
   onFotoMapillary,
@@ -931,6 +934,30 @@ export default function Mapa({
         },
       })
 
+      /*
+       * ── Los puntos que alimentan el analisis.
+       *
+       * Van encima de todo lo demas, incluidos los registros normales: el
+       * sentido de esta capa es decir «de estos sale la cuenta», y para eso
+       * tienen que verse por delante. Blanco con borde oscuro, que es el unico
+       * par que se lee igual sobre la mancha azul del punto frio y sobre la
+       * roja del caliente.
+       */
+      m.addSource('analisis-puntos', { type: 'geojson', data: VACIO })
+      m.addLayer({
+        id: 'analisis-puntos',
+        type: 'circle',
+        source: 'analisis-puntos',
+        layout: { visibility: 'none' },
+        paint: {
+          'circle-radius': ['interpolate', ['linear'], ['zoom'], 11, 2.5, 14, 4, 18, 7],
+          'circle-color': '#ffffff',
+          'circle-stroke-width': 1.2,
+          'circle-stroke-color': raiz.getPropertyValue('--gr-tinta').trim() || '#16202a',
+          'circle-opacity': 0.95,
+        },
+      })
+
       // ── Alcance de cada equipamiento. Va en linea y sin relleno: con
       // trescientos circulos superpuestos, el relleno se acumula y la mancha
       // acaba diciendo mas de los solapes que de la cobertura.
@@ -1271,6 +1298,15 @@ export default function Mapa({
     })
   }, [espacial, mapaListo])
 
+  // Los puntos que alimentan el analisis abierto.
+  useEffect(() => {
+    cuandoListo((m) => {
+      ;(m.getSource('analisis-puntos') as maplibregl.GeoJSONSource | undefined)?.setData(
+        puntosAnalisis ?? VACIO,
+      )
+    })
+  }, [puntosAnalisis, mapaListo])
+
   // Celdas del analisis de puntos calientes.
   useEffect(() => {
     cuandoListo((m) => {
@@ -1578,6 +1614,7 @@ export default function Mapa({
       poner('isocrona-calles-linea', hayIsocrona && espacial.verCalles)
       poner('cruce-alerta', cruce !== null && capas.osm)
       poner('hotspot-relleno', hotspot !== null)
+      poner('analisis-puntos', puntosAnalisis !== null)
 
       /*
        * Opacidad de los puntos. Son tres situaciones y una sola propiedad:
@@ -1602,7 +1639,18 @@ export default function Mapa({
         r.getElement().style.display = capas.plataformas ? '' : 'none'
       }
     })
-  }, [capas, mapaCalor, deficit, cobertura, alcance, cruce, hotspot, mapaListo, espacial])
+  }, [
+    capas,
+    mapaCalor,
+    deficit,
+    cobertura,
+    alcance,
+    cruce,
+    hotspot,
+    puntosAnalisis,
+    mapaListo,
+    espacial,
+  ])
 
   /**
    * Plataforma activa: se rellena, se engruesa su contorno, las demás se

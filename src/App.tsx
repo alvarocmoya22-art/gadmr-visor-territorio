@@ -33,7 +33,7 @@ import { distanciaM } from './lib/geo'
 import { calcularCobertura, elementosDe, serviciosDe, tiposDisponibles } from './lib/cobertura'
 import { POR_CLAVE } from './lib/categorias'
 import { claveNivel, nivelDe, nivelInicial } from './lib/norma'
-import { calcularHotspot, clasesDe } from './lib/hotspot'
+import { calcularHotspot, clasesDe, TODA_LA_CATEGORIA } from './lib/hotspot'
 /*
  * Solo los tipos: `import type` no deja nada en el paquete, asi que el modulo
  * de isocronas y los dos megas de la red siguen cargandose con `import()` solo
@@ -633,6 +633,52 @@ export default function App() {
   ])
 
   /**
+   * Los puntos con los que se esta calculando el analisis abierto.
+   *
+   * Un mapa de manchas sin los puntos que las producen pide un acto de fe. Con
+   * ellos encima se ve de que sale cada cosa —y, mas util todavia, se ve cuando
+   * una mancha nace de cuatro registros y no de cuarenta—.
+   *
+   * No son los mismos para cada analisis: la cobertura cuenta equipamientos, el
+   * punto caliente cuenta registros de OSM de una subcategoria y el inventario
+   * cuenta hallazgos. Cada uno enseña los suyos.
+   */
+  const puntosAnalisis = useMemo((): GeoJSON.FeatureCollection | null => {
+    const deLista = (lista: { lon: number; lat: number }[]): GeoJSON.FeatureCollection => ({
+      type: 'FeatureCollection',
+      features: lista.map((p) => ({
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: [p.lon, p.lat] },
+        properties: {},
+      })),
+    })
+
+    if (analisis.activo === 'hotspot') {
+      if (!analisis.hotClase) return null
+      const todas = analisis.hotClase === TODA_LA_CATEGORIA
+      return deLista(
+        ambito.filter((p) =>
+          todas ? p.categoria === analisis.hotCategoria : p.clase === analisis.hotClase,
+        ),
+      )
+    }
+    if (analisis.activo === 'distancia' || analisis.activo === 'cobertura') {
+      return deLista(servicios.servicios)
+    }
+    if (analisis.activo === 'inventario') {
+      return deLista(hallazgos.map((h) => h.punto))
+    }
+    return null
+  }, [
+    analisis.activo,
+    analisis.hotCategoria,
+    analisis.hotClase,
+    ambito,
+    servicios,
+    hallazgos,
+  ])
+
+  /**
    * Lo que dice la franja de indicadores segun la pestana abierta.
    *
    * Hasta aqui la franja decia siempre lo mismo —el estado del levantamiento—
@@ -1170,6 +1216,7 @@ export default function App() {
             }
             capas={capas}
             hotspot={hotspot?.geo ?? null}
+            puntosAnalisis={puntosAnalisis}
             onSeleccionar={elegirPunto}
             onSeleccionarEquipamiento={elegirEquipamiento}
             onFotoCercana={setFotoRespaldo}
