@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Mapa, { type CapasVisibles, type MapaCalor } from './components/Mapa'
-import PanelKpis from './components/PanelKpis'
+import PanelKpis, { type Tarjeta } from './components/PanelKpis'
 import CabeceraAmbito from './components/CabeceraAmbito'
 import Filtros from './components/Filtros'
 import Pestanas, { type Pestana } from './components/Pestanas'
@@ -43,7 +43,7 @@ import { avancePorPlataforma, URBANO } from './lib/municipal'
 import { VISTA_INICIAL } from './config/riobamba'
 import { MAPA_BASE_INICIAL } from './config/mapasBase'
 import { hayToken as hayTokenMapillary } from './lib/mapillary'
-import { fecha, numero } from './lib/format'
+import { fecha, numero, porcentaje } from './lib/format'
 import { useFotosCalle } from './hooks/useFotosCalle'
 import { recargarDeVerdad, useVersionNueva } from './hooks/useVersion'
 import type { Foto } from './lib/mapillary'
@@ -592,6 +592,213 @@ export default function App() {
     return filtros.barrio ?? 'todo el cantón'
   })()
 
+  /**
+   * Lo que dice la franja de indicadores segun la pestana abierta.
+   *
+   * Hasta aqui la franja decia siempre lo mismo —el estado del levantamiento—
+   * aunque en pantalla se estuviera midiendo otra cosa, y es el sitio mas
+   * visible del visor. Con un analisis abierto pasa a encabezarlo el, y sus
+   * cifras se mudan del panel lateral, que es estrecho, al ancho de la franja.
+   * No se duplican: se mudan.
+   *
+   * Sin nada elegido vuelve al levantamiento, que es la respuesta correcta a
+   * «como esta el dato».
+   */
+  const franja = useMemo((): { titulo: string; tarjetas: Tarjeta[] } | null => {
+    if (pestana === 'analisis') {
+      if (deficit) {
+        return {
+          titulo: 'Distancia al equipamiento',
+          tarjetas: [
+            { valor: numero(deficit.filas.length), rotulo: 'Barrios medidos', pie: ambitoRotulo },
+            {
+              valor: numero(deficit.sinNada),
+              rotulo: 'Sin ningun equipamiento',
+              pie: `de ${numero(deficit.filas.length)} barrios del ambito`,
+              tono: deficit.sinNada > 0 ? 'aviso' : 'ok',
+            },
+            {
+              valor: deficit.mediana === null ? '—' : `${numero(deficit.mediana)} m`,
+              rotulo: 'Distancia mediana',
+              pie: 'en linea recta, no por calle',
+            },
+          ],
+        }
+      }
+      if (cobertura) {
+        const conPoblacion = cobertura.poblacion > 0
+        const pct = conPoblacion ? (cobertura.poblacionCubierta / cobertura.poblacion) * 100 : 0
+        return {
+          titulo: `Cobertura · ${analisis.tipo}`,
+          tarjetas: [
+            conPoblacion
+              ? {
+                  valor: porcentaje(pct),
+                  rotulo: 'De la poblacion cubierta',
+                  pie: `${numero(Math.round(cobertura.poblacionCubierta))} de ${numero(cobertura.poblacion)} habitantes`,
+                  tono: pct >= 80 ? 'ok' : pct >= 50 ? 'aviso' : 'error',
+                }
+              : {
+                  valor: porcentaje(cobertura.total * 100),
+                  rotulo: 'Del area cubierta',
+                  pie: 'sin datos de poblacion en el ambito',
+                },
+            {
+              valor: numero(Math.round(cobertura.poblacion - cobertura.poblacionCubierta)),
+              rotulo: 'Personas fuera de alcance',
+              pie: `radio de ${numero(cobertura.radio)} m segun el Codigo Urbano`,
+              tono: 'aviso',
+            },
+            {
+              valor: numero(cobertura.sinNada),
+              rotulo: 'Barrios sin nada',
+              pie: 'ni un equipamiento dentro del radio',
+              tono: cobertura.sinNada > 0 ? 'aviso' : 'ok',
+            },
+            {
+              valor: numero(cobertura.servicios),
+              rotulo: 'Equipamientos contados',
+              pie: `${numero(cobertura.deGadm)} del inventario · ${numero(cobertura.deOsm)} de OSM`,
+            },
+          ],
+        }
+      }
+      if (cruce) {
+        const pct = cruce.nA ? (cruce.cubiertos / cruce.nA) * 100 : 0
+        return {
+          titulo: 'Cruce de categorias',
+          tarjetas: [
+            {
+              valor: porcentaje(pct),
+              rotulo: `A menos de ${numero(cruce.umbral)} m`,
+              pie: `${numero(cruce.cubiertos)} de ${numero(cruce.nA)} registros`,
+              tono: pct >= 80 ? 'ok' : pct >= 50 ? 'aviso' : 'error',
+            },
+            {
+              valor: cruce.mediana === null ? '—' : `${numero(cruce.mediana)} m`,
+              rotulo: 'Distancia mediana',
+              pie: 'al mas cercano de la otra categoria',
+            },
+            {
+              valor: numero(cruce.desatendidos.length),
+              rotulo: 'Quedan fuera',
+              pie: 'resaltados en el mapa',
+              tono: cruce.desatendidos.length > 0 ? 'aviso' : 'ok',
+            },
+          ],
+        }
+      }
+      if (analisis.activo === 'inventario') {
+        return {
+          titulo: 'Sin inventariar',
+          tarjetas: [
+            {
+              valor: numero(hallazgos.length),
+              rotulo: 'Posibles equipamientos',
+              pie: 'estan en OpenStreetMap y no en el inventario del GADM',
+              tono: hallazgos.length > 0 ? 'aviso' : 'ok',
+            },
+            { valor: numero(equipAmbito.length), rotulo: 'En el inventario', pie: ambitoRotulo },
+          ],
+        }
+      }
+      return null
+    }
+
+    if (pestana === 'espacial' && espacial.escenario === 'isocronas' && isocrona) {
+      const dentro = isocrona.poblacionPorTramo.get(espacial.minutos) ?? 0
+      const pct = isocrona.poblacion ? (dentro / isocrona.poblacion) * 100 : 0
+      const ha = isocrona.bandas.find((b) => b.minutos === espacial.minutos)?.hectareas ?? 0
+      return {
+        titulo: `Isocrona · ${espacial.tipoEquipamiento}`,
+        tarjetas: [
+          {
+            valor: numero(Math.round(dentro)),
+            rotulo: `Habitantes a ${numero(espacial.minutos)} min andando`,
+            pie: `de ${numero(Math.round(isocrona.poblacion))} en ${ambitoRotulo}`,
+            tono: pct >= 80 ? 'ok' : pct >= 50 ? 'aviso' : 'error',
+          },
+          { valor: porcentaje(pct), rotulo: 'Del ambito', pie: 'por calle, no en linea recta' },
+          { valor: `${numero(Math.round(ha))} ha`, rotulo: 'Superficie al alcance' },
+          {
+            valor: numero(isocrona.origenes),
+            rotulo: 'Equipamientos de partida',
+            pie: 'de todo el urbano, no solo del ambito',
+          },
+        ],
+      }
+    }
+
+    if (pestana === 'espacial' && espacial.escenario === 'barrios' && barriosAmbito.length > 0) {
+      const habitantes = barriosAmbito.reduce((s, b) => s + b.pob, 0)
+      const peor = prioridades[0] ?? null
+      return {
+        titulo: `Barrios en 3D · ${espacial.tipoEquipamiento}`,
+        tarjetas: [
+          { valor: numero(barriosAmbito.length), rotulo: 'Barrios en vista', pie: ambitoRotulo },
+          {
+            valor: numero(habitantes),
+            rotulo: 'Habitantes',
+            pie: 'Censo 2022 repartido por edificios',
+          },
+          {
+            valor: peor && peor.distancia !== null ? `${numero(peor.distancia)} m` : '—',
+            rotulo: 'El peor servido',
+            // La altura es la gente y el color la distancia: la prioridad sale
+            // de las dos juntas, no de ninguna por separado.
+            pie: peor ? `${peor.nombre} · ${numero(peor.pob)} hab` : undefined,
+            tono: 'aviso',
+          },
+          {
+            valor: numero(Math.max(0, ...barriosAmbito.map((b) => b.pob))),
+            rotulo: 'El mas poblado',
+            pie: 'habitantes del barrio mayor',
+          },
+        ],
+      }
+    }
+
+    if (pestana === 'espacial' && espacial.escenario === 'flujos' && flujos) {
+      return {
+        titulo: 'Asignacion barrio → equipamiento',
+        tarjetas: [
+          {
+            valor: numero(Math.round(flujos.resumen.poblacion)),
+            rotulo: 'Habitantes asignados',
+            pie: `${numero(flujos.arcos)} barrios enlazados`,
+          },
+          {
+            valor: numero(Math.round(flujos.resumen.poblacionLejos)),
+            rotulo: 'A mas de un kilometro',
+            pie: `en ${numero(flujos.resumen.lejos)} barrios`,
+            tono: flujos.resumen.lejos > 0 ? 'aviso' : 'ok',
+          },
+          {
+            valor: flujos.resumen.mediana === null ? '—' : `${numero(flujos.resumen.mediana)} m`,
+            rotulo: 'Distancia mediana',
+          },
+        ],
+      }
+    }
+
+    return null
+  }, [
+    pestana,
+    deficit,
+    cobertura,
+    cruce,
+    hallazgos,
+    analisis.activo,
+    analisis.tipo,
+    equipAmbito,
+    espacial,
+    isocrona,
+    flujos,
+    barriosAmbito,
+    prioridades,
+    ambitoRotulo,
+  ])
+
   const descargarHallazgos = () =>
     descargarCsv(
       hallazgosACsv(hallazgos),
@@ -931,6 +1138,8 @@ export default function App() {
             totalCanton={todos.length}
             equipamientos={equipFiltrados.length}
             equipPorVerificar={porVerificar.length}
+            tarjetas={franja?.tarjetas}
+            titulo={franja?.titulo}
           />
         </div>
 

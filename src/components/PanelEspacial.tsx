@@ -1,5 +1,5 @@
 import { POR_CLAVE, colorSerie, type ClaveCategoria } from '../lib/categorias'
-import { numero, porcentaje } from '../lib/format'
+import { numero } from '../lib/format'
 import {
   ESCENARIOS,
   RADIOS_HEXAGONO,
@@ -192,16 +192,6 @@ export default function PanelEspacial({
             </select>
           </label>
 
-          <Cifras
-            items={[
-              { t: 'registros en vista', v: numero(totalPuntos) },
-              { t: 'categorías', v: numero(porCategoria.length) },
-              {
-                t: 'pendientes',
-                v: totalPuntos ? porcentaje((pendientes / totalPuntos) * 100) : '—',
-              },
-            ]}
-          />
 
           <table className="gr-tabla">
             <caption className="gr-eyebrow mb-1 text-left">Registros por categoría</caption>
@@ -553,27 +543,6 @@ export default function PanelEspacial({
 
           {isocrona ? (
             <>
-              <Cifras
-                items={[
-                  {
-                    t: 'habitantes dentro',
-                    v: numero(Math.round(isocrona.poblacionPorTramo.get(estado.minutos) ?? 0)),
-                  },
-                  {
-                    t: 'de los del ámbito',
-                    v: isocrona.poblacion
-                      ? `${numero(
-                          Math.round(
-                            ((isocrona.poblacionPorTramo.get(estado.minutos) ?? 0) /
-                              isocrona.poblacion) *
-                              1000,
-                          ) / 10,
-                        )} %`
-                      : '—',
-                  },
-                  { t: 'equipamientos del urbano', v: numero(isocrona.origenes) },
-                ]}
-              />
 
               {/* De donde sale y a que se recorta son dos cosas distintas, y
                   quien lee la cifra tiene que poder distinguirlas. */}
@@ -714,16 +683,6 @@ export default function PanelEspacial({
 
           {flujos && arcos > 0 ? (
             <>
-              <Cifras
-                items={[
-                  { t: 'barrios asignados', v: numero(arcos) },
-                  {
-                    t: 'distancia mediana',
-                    v: flujos.mediana === null ? '—' : `${numero(flujos.mediana)} m`,
-                  },
-                  { t: 'población', v: numero(flujos.poblacion) },
-                ]}
-              />
 
               <p className="text-[11px]" style={{ color: 'var(--gr-tinta-3)' }}>
                 {numero(flujos.lejos)} barrios a más de {numero(ARCO_ALERTA_M)} m, con{' '}

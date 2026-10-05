@@ -126,6 +126,34 @@ del inventario municipal que aún no se confirman contra OSM.
 La tabla «Registros por plataforma» las muestra juntas, con fila de totales, de
 modo que se pueda comparar las 18 de un vistazo.
 
+### La franja de indicadores sigue a la pestaña abierta
+
+Esos cuatro KPI son la respuesta a «cómo está el dato», y durante mucho tiempo
+eran lo único que decía la franja bajo el mapa, aunque en pantalla se estuviera
+midiendo otra cosa. Es el sitio más visible del visor: con un análisis abierto
+ahora lo encabeza él.
+
+Las cifras **no se duplican, se mudan**. Salen del panel lateral —que es una
+columna estrecha donde tres números comparten el ancho de un control— y pasan al
+ancho de la franja. El panel se queda con lo que no cabe allá: los controles,
+las tablas y las notas de método.
+
+Qué la encabeza en cada sitio: en **Análisis**, el análisis abierto —distancia,
+cobertura, cruce o inventario—; en **Espacial**, las isócronas, la asignación
+barrio → equipamiento y los barrios en 3D. Los escenarios de puntos y de
+densidad no: lo que muestran en el panel es el eco de lo que acabas de elegir
+—«radio: 150 m», «vista: 3D»—, no un hallazgo. La franja lleva hallazgos; el
+panel, lo que repite tu selección.
+
+**La última tarjeta siempre es el estado del levantamiento**, y no por simetría:
+todas las demás cifras se calculan sobre esos registros. Un 68,3 % de cobertura
+significa una cosa si el dato está verificado al 80 % y otra muy distinta si lo
+está al 16 %, y quien lee la franja tiene que ver las dos a la vez.
+
+Y cuando no hay registros cargados —los espejos de Overpass fallan a ratos— esa
+tarjeta dice «sin registros de OpenStreetMap cargados» en vez de «0,0 %». No
+tener dato y tener dato sin verificar son dos cosas distintas.
+
 ## Los espejos de Overpass no van sincronizados
 
 Esto causó el problema más difícil de ver de todo el proyecto: **la misma
@@ -745,6 +773,14 @@ Los niveles **cantonales no se ofrecen**, y no por falta de dato: la tabla les
 pone «---» porque sirven a toda la ciudad y no tienen área de influencia local.
 Medirlos con un radio inventado daría una cifra sin respaldo. El visor lo dice
 en pantalla en vez de dejar el hueco.
+
+**Y dos usos no tienen radio en ningún nivel: Administración Pública y
+Especial.** La Tabla 3 les pone «---» en todos, por el mismo motivo: sirven a la
+ciudad entera y no a un sector. Ahí no es que falte un nivel, es que la medición
+no aplica, y la cobertura por radio se queda vacía a propósito. Decía «el nivel
+cantonal no aparece», que mandaba a buscar un control inexistente; ahora lo
+explica y remite a lo que sí se puede medir sin radio normativo: los **minutos
+andando** del escenario de isócronas.
 
 ### El nivel no es solo un número, también elige qué se cuenta
 

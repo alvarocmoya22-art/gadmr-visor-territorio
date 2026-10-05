@@ -102,23 +102,13 @@ const campo = {
   color: 'var(--gr-tinta)',
 }
 
-/** Tres cifras en fila; es el formato que comparten los cuatro análisis. */
-function Cifras({ items }: { items: { t: string; v: string }[] }) {
-  return (
-    <dl className="grid grid-cols-3 gap-2 text-center">
-      {items.map((c) => (
-        <div key={c.t}>
-          <dd className="gr-num text-[16px] font-bold" style={{ color: 'var(--gr-tinta)' }}>
-            {c.v}
-          </dd>
-          <dt className="text-[10px]" style={{ color: 'var(--gr-tinta-3)' }}>
-            {c.t}
-          </dt>
-        </div>
-      ))}
-    </dl>
-  )
-}
+/*
+ * Aqui vivian las tres cifras en fila de cada analisis, y ya no: ahora
+ * encabezan la franja de indicadores bajo el mapa, donde tienen el ancho de la
+ * pantalla en vez de un tercio de columna. No se duplican, se mudaron. Este
+ * panel se queda con lo que no cabe alla: los controles, las tablas y las
+ * notas de metodo.
+ */
 
 /** Leyenda de una coropleta. */
 function Escala({ tramos }: { tramos: { color: string; rotulo: string }[] }) {
@@ -319,16 +309,6 @@ export default function PanelAnalisis({
           <Escala tramos={TRAMOS_DISTANCIA} />
           {deficit && (
             <>
-              <Cifras
-                items={[
-                  { t: 'barrios', v: numero(deficit.filas.length) },
-                  { t: 'sin ninguno', v: numero(deficit.sinNada) },
-                  {
-                    t: 'mediana',
-                    v: deficit.mediana === null ? '—' : `${numero(deficit.mediana)} m`,
-                  },
-                ]}
-              />
               <ListaBarrios
                 titulo="Los más alejados"
                 onElegir={onElegirBarrio}
@@ -387,37 +367,33 @@ export default function PanelAnalisis({
                 </p>
               )
             })()}
-            {(NORMA[analisis.tipo] ?? []).some((n) => n.radio === null) && (
-              <p className="mt-1 text-[11px]" style={{ color: 'var(--gr-tinta-3)' }}>
-                El nivel cantonal no aparece porque la ordenanza no le fija radio: sirve a toda la
-                ciudad.
+            {/*
+              Dos usos —Administración Pública y Especial— no tienen radio en
+              ningún nivel: la Tabla 3 les pone «---» en todos. Ahí no es que
+              falte un nivel, es que esta medición no aplica, y decir «el nivel
+              cantonal no aparece» mandaba a buscar un control que no existe.
+            */}
+            {nivelesMedibles(analisis.tipo).length === 0 ? (
+              <p className="gr-nota gr-nota--aviso mt-1">
+                La ordenanza <b>no fija radio de influencia a ningún nivel</b> de{' '}
+                {analisis.tipo.toLowerCase()}: la Tabla 3 pone «---» en todos, porque este uso
+                sirve a la ciudad entera y no a un sector. No hay radio con el que medir cobertura,
+                así que este análisis se queda vacío a propósito.{' '}
+                <b>Lo que sí se puede medir son los minutos andando</b>, que no necesitan radio
+                normativo: está en la pestaña Espacial, escenario «Isócronas a pie».
               </p>
+            ) : (
+              (NORMA[analisis.tipo] ?? []).some((n) => n.radio === null) && (
+                <p className="mt-1 text-[11px]" style={{ color: 'var(--gr-tinta-3)' }}>
+                  El nivel cantonal no aparece porque la ordenanza no le fija radio: sirve a toda la
+                  ciudad.
+                </p>
+              )
             )}
           </div>
 
           {cobertura && (
             <>
-              <Cifras
-                items={
-                  cobertura.poblacion > 0
-                    ? [
-                        {
-                          t: 'de la población cubierta',
-                          v: porcentaje((cobertura.poblacionCubierta / cobertura.poblacion) * 100),
-                        },
-                        {
-                          t: 'personas fuera',
-                          v: numero(cobertura.poblacion - cobertura.poblacionCubierta),
-                        },
-                        { t: 'equipamientos', v: numero(cobertura.servicios) },
-                      ]
-                    : [
-                        { t: 'del área cubierta', v: porcentaje(cobertura.total * 100) },
-                        { t: 'barrios sin nada', v: numero(cobertura.sinNada) },
-                        { t: 'equipamientos', v: numero(cobertura.servicios) },
-                      ]
-                }
-              />
 
               {cobertura.poblacion > 0 && (
                 <p className="text-[11px]" style={{ color: 'var(--gr-tinta-3)' }}>
@@ -523,19 +499,6 @@ export default function PanelAnalisis({
                   frente a <b className="gr-num">{numero(cruce.nB)}</b>{' '}
                   {rotulo(cruce.b).toLowerCase()}.
                 </p>
-                <Cifras
-                  items={[
-                    {
-                      t: `a menos de ${cruce.umbral} m`,
-                      v: `${Math.round((cruce.cubiertos / cruce.nA) * 100)} %`,
-                    },
-                    {
-                      t: 'distancia mediana',
-                      v: cruce.mediana === null ? '—' : `${numero(cruce.mediana)} m`,
-                    },
-                    { t: 'quedan fuera', v: numero(cruce.desatendidos.length) },
-                  ]}
-                />
                 <p
                   className="flex items-center gap-2 text-[11px]"
                   style={{ color: 'var(--gr-tinta-3)' }}
