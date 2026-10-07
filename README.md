@@ -287,6 +287,25 @@ no un edificio de una planta.
 Pesa 1,5 MB y **se descarga la primera vez que alguien enciende la capa**, no al
 abrir el visor, igual que la red peatonal.
 
+**Al encender la capa se pide la versión viva de OpenStreetMap.** El archivo es
+la foto del día en que se corrió el script, y el levantamiento en campo añade
+edificación todas las semanas: entre una cosa y otra ya hay **mil cien edificios
+de diferencia** —6.039 en el archivo, 7.150 en OSM hoy—.
+
+La foto se dibuja primero y la consulta va por detrás: son cinco megas y unos
+segundos, y hacer esperar a quien enciende la capa para enseñarle casi lo mismo
+sería un mal cambio. Cuando llega lo nuevo, se sustituye sin que nadie pida
+nada. Se guarda en memoria mientras dure la sesión y no en `localStorage`,
+porque dos megas competirían con la caché de los registros por una cuota que no
+da para los dos: apagar y encender la capa no vuelve a descargar, recargar la
+página sí.
+
+Si ningún espejo responde no se anuncia nada: la capa ya está dibujada con la
+foto, que sigue siendo buena. Se prueban los dos espejos **dos veces, con una
+pausa en medio**, porque un 504 de Overpass es corriente y pasajero —el servidor
+estaba ocupado, no roto— y rendirse al primero dejaba la capa con el archivo
+viejo por nada.
+
 **Va por encima de las manchas del análisis y por debajo de los puntos.** Estaba
 declarada debajo de todo, y con un análisis abierto las coropletas —que son
 planas— se pintaban sobre los edificios y los dejaban lavados. En una vista en

@@ -1531,6 +1531,41 @@ export default function Mapa({
   }, [edificiosListos, mapaListo])
 
   /*
+   * Y en cuanto esta dibujada la foto del repositorio, se pide la viva.
+   *
+   * El archivo es del dia en que se corrio el script y el levantamiento en
+   * campo anade edificacion todas las semanas; entre una cosa y otra ya hay
+   * dos mil edificios de diferencia. Va por detras a proposito: son cinco
+   * megas y unos segundos, y hacer esperar a quien enciende la capa para
+   * enseñarle casi lo mismo seria un mal cambio.
+   *
+   * Si ningun espejo responde no hay nada que anunciar: la capa ya esta
+   * dibujada con la foto, que sigue siendo buena.
+   */
+  const edificiosFrescos = useRef(false)
+  useEffect(() => {
+    if (!capas.edificios || !mapaListo || edificiosFrescos.current) return
+    const piezas = (capasMunicipales?.plataformas ?? []).flatMap((p) => p.poligonos)
+    if (piezas.length === 0) return
+    let vivo = true
+    void (async () => {
+      const { edificacionViva } = await import('../lib/edificiosOsm')
+      const fresca = await edificacionViva(piezas)
+      if (!vivo || !fresca) return
+      // La marca se pone solo si llego algo: si Overpass no respondio, apagar y
+      // encender la capa vuelve a intentarlo, que es lo que uno espera.
+      edificiosFrescos.current = true
+      cuandoListo((m) => {
+        const fuente = m.getSource('edificios') as maplibregl.GeoJSONSource | undefined
+        fuente?.setData(fresca.geo)
+      })
+    })()
+    return () => {
+      vivo = false
+    }
+  }, [capas.edificios, capasMunicipales, mapaListo])
+
+  /*
    * El catastro son catorce megas en claro —menos de dos al viajar comprimido—
    * y se descarga la primera vez que alguien lo enciende, igual que la
    * edificacion y la red peatonal.
