@@ -169,6 +169,15 @@ export interface Cobertura {
   alcance: GeoJSON.FeatureCollection
   /** Superficie cubierta sobre el total del ámbito, de 0 a 1. */
   total: number
+  /**
+   * Cuántas veces cabe el ámbito dentro de un solo círculo de alcance.
+   *
+   * Cuando pasa de uno, un equipamiento solo ya cubriría toda la zona y el
+   * porcentaje de cobertura deja de medir nada: sale casi cien por definición,
+   * no por dotación. Pasa con los radios zonales de 3 km sobre un área urbana
+   * de 29 km², que es justo el tamaño de un círculo de ese radio.
+   */
+  holgura: number
   /** Barrios sin nada de superficie cubierta. */
   sinNada: number
   /** Habitantes del ámbito; 0 cuando no hay datos de población cargados. */
@@ -365,6 +374,8 @@ export function calcularCobertura(
       })),
     },
     total: areaTotal ? areaCubierta / areaTotal : 0,
+    // areaTotal viene en hectáreas; el círculo, en metros cuadrados.
+    holgura: areaTotal ? (Math.PI * radio * radio) / (areaTotal * 10000) : 0,
     sinNada: filas.filter((f) => f.cubierto === 0).length,
     poblacion: Math.round(pobTotal),
     poblacionCubierta: Math.round(pobCubierta),

@@ -557,6 +557,22 @@ export default function PanelAnalisis({
                 </p>
               )}
 
+              {/* Un radio mas grande que la propia zona no mide dotacion:
+                  mide el radio. Decirlo aqui evita leer un 99,6 % como una
+                  buena noticia cuando es una tautologia. */}
+              {cobertura.holgura >= 0.5 && (
+                <p className="gr-nota gr-nota--aviso">
+                  Con un radio de {numero(cobertura.radio)} m,{' '}
+                  <b>
+                    el círculo de un solo equipamiento mide{' '}
+                    {numero(Math.round(cobertura.holgura * 100))} % de {ambito}
+                  </b>
+                  . Que la cobertura salga casi del 100 % no dice que la dotación sea buena: dice
+                  que la ordenanza le fija a este uso un radio del tamaño de la ciudad. Para algo
+                  así mide mejor los minutos andando del escenario de isócronas.
+                </p>
+              )}
+
               <Escala tramos={TRAMOS_COBERTURA} />
 
               <ListaBarrios
