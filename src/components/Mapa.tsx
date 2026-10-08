@@ -1076,6 +1076,38 @@ export default function Mapa({
         if (f) cb.current.onElegirBarrio(String(f.properties?.nombre ?? ''))
       })
 
+      /*
+       * La edificacion tambien se explica al pasar por encima.
+       *
+       * Un volumen sin cifra no dice de donde sale su altura, y esa es
+       * justamente la pregunta: con doce mil edificios dibujados, lo que
+       * importa saber de cada uno es si su altura esta medida o es el relleno
+       * de tres metros que se pone cuando OpenStreetMap no trae el dato.
+       */
+      m.on('mousemove', 'edificios-3d', (e) => {
+        const f = e.features?.[0]
+        if (!f) return
+        m.getCanvas().style.cursor = 'pointer'
+        const altura = Number(f.properties?.altura ?? 0)
+        const medido = f.properties?.medido === true || f.properties?.medido === 'true'
+        const clase = String(f.properties?.clase ?? 'yes')
+        const pisos = Math.round(altura / 3)
+        globo
+          .setLngLat(e.lngLat)
+          .setHTML(
+            `<b>${altura} m de alto</b><br>` +
+              (medido
+                ? `altura declarada en OpenStreetMap · unos ${pisos} piso${pisos === 1 ? '' : 's'}`
+                : 'sin altura en OpenStreetMap · dibujado al mínimo') +
+              (clase && clase !== 'yes' ? `<br>building=${clase}` : ''),
+          )
+          .addTo(m)
+      })
+      m.on('mouseleave', 'edificios-3d', () => {
+        m.getCanvas().style.cursor = ''
+        globo.remove()
+      })
+
       m.on('mouseleave', 'deficit-relleno', () => {
         m.getCanvas().style.cursor = ''
         globo.remove()

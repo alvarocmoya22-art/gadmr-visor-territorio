@@ -306,6 +306,13 @@ pausa en medio**, porque un 504 de Overpass es corriente y pasajero —el servid
 estaba ocupado, no roto— y rendirse al primero dejaba la capa con el archivo
 viejo por nada.
 
+**Al pasar por encima, cada edificio dice de dónde sale su altura.** Un volumen
+sin cifra no explica nada, y con siete mil dibujados la pregunta de cada uno es
+si su altura está medida o es el relleno de tres metros que se pone cuando
+OpenStreetMap no trae el dato. La ventana flotante lo distingue: «9 m de alto ·
+altura declarada en OpenStreetMap · unos 3 pisos» frente a «sin altura en
+OpenStreetMap · dibujado al mínimo».
+
 **Va por encima de las manchas del análisis y por debajo de los puntos.** Estaba
 declarada debajo de todo, y con un análisis abierto las coropletas —que son
 planas— se pintaban sobre los edificios y los dejaban lavados. En una vista en
