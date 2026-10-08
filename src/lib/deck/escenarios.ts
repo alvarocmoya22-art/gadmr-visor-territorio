@@ -31,6 +31,7 @@ import {
   ARCO_ORIGEN,
   paletaCategorias,
   paletaFrescura,
+  RAMPA_CARENCIA,
   RAMPA_DENSIDAD,
   type Rgba,
 } from './colores'
@@ -264,18 +265,21 @@ export function capaBarrios(
   extruido: boolean,
 ): Layer {
   const maximo = Math.max(1, ...piezas.map((p) => alturaDe(p, altura)))
-  // La escala del color del deficit, la misma de la pestana Analisis: las dos
-  // responden a la misma pregunta y deben leerse igual.
+  /*
+   * Rampa de carencia, no la secuencial azul: sobre el lienzo oscuro, el
+   * extremo malo del azul se confundia con el fondo y el barrio peor servido
+   * era el que menos se veia.
+   */
   const tono = (p: PiezaBarrio): Rgba => {
     if (color === 'servicios') {
-      // Sin servicios basicos -> extremo oscuro, igual que «lejos».
+      // Sin servicios basicos -> extremo rojo, igual que «lejos».
       const i = Math.min(5, Math.floor((1 - p.servicios) * 6))
-      return RAMPA_DENSIDAD[i]
+      return RAMPA_CARENCIA[i]
     }
     const d = p.distancia
-    if (d === null) return RAMPA_DENSIDAD[5]
+    if (d === null) return RAMPA_CARENCIA[5]
     const i = d < 250 ? 0 : d < 500 ? 1 : d < 750 ? 2 : d < 1000 ? 3 : 4
-    return RAMPA_DENSIDAD[i + 1]
+    return RAMPA_CARENCIA[i + 1]
   }
 
   return new PolygonLayer<PiezaBarrio>({

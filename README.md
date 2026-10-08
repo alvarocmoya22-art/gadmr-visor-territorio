@@ -668,6 +668,14 @@ le queda el servicio**. Un barrio alto y oscuro es una prioridad; uno bajo y
 oscuro, no tanto, porque casi no hay a quien atender. Es la diferencia que el
 déficit por distancia, a secas, no sabía expresar.
 
+El color ya no usa la rampa azul secuencial, y no es cuestión de gusto: su
+extremo malo era un azul casi negro, el mismo tono del lienzo oscuro, así que
+**el barrio peor servido era el que menos se veía** —justo al revés de lo que
+hace falta—. Ahora va de ámbar claro a rojo profundo: el extremo que importa
+salta a la vista y la lectura es la que uno espera sin leyenda. Los colores
+semánticos del sistema siguen reservados para el estado del levantamiento; esto
+es una magnitud, no un estado, y por eso lleva rampa propia.
+
 La tabla que acompaña ordena por población × distancia, así que arriba quedan
 los que suman las dos cosas: Subestación Eléctrica con 2.723 habitantes a 977 m
 de la escuela más cercana, o Av. Maldonado con 2.949 a 645 m.

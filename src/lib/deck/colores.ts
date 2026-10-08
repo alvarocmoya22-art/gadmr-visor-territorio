@@ -86,6 +86,28 @@ export const RAMPA_DENSIDAD: Rgba[] = [
 ]
 
 /**
+ * Rampa de carencia, para los barrios en tres dimensiones.
+ *
+ * La secuencial azul no sirve aquí y no es cuestión de gusto: su extremo malo
+ * es un azul casi negro, el mismo tono del lienzo oscuro, así que el barrio
+ * peor servido era el que menos se veía. Justo al revés de lo que hace falta.
+ *
+ * De ámbar claro a rojo profundo: el extremo que importa salta a la vista sobre
+ * el fondo, y la lectura es la que uno espera sin leyenda —más rojo, más
+ * carencia—. Los colores semánticos del sistema quedan para el estado del
+ * levantamiento; esto es una magnitud, no un estado, y por eso lleva rampa
+ * propia y no el verde/ámbar/rojo de aquellos.
+ */
+export const RAMPA_CARENCIA: Rgba[] = [
+  [247, 227, 161, 205],
+  [240, 179, 94, 215],
+  [224, 129, 60, 225],
+  [201, 84, 47, 235],
+  [163, 45, 38, 245],
+  [122, 21, 24, 250],
+]
+
+/**
  * Color de una banda de la isócrona.
  *
  * Lo usan el mapa y la leyenda del panel. Vive aquí y no en la capa para que

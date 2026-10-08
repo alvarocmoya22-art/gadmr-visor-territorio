@@ -13,7 +13,7 @@ import {
   type ColorPor,
   type PesoDensidad,
 } from '../config/deckEscenarios'
-import { RAMPA_DENSIDAD, colorBanda } from '../lib/deck/colores'
+import { RAMPA_CARENCIA, colorBanda } from '../lib/deck/colores'
 import { MINUTOS, VELOCIDAD_M_MIN } from '../lib/isocronas'
 import type { Gestion } from '../lib/cobertura'
 
@@ -308,7 +308,7 @@ export default function PanelEspacial({
                 aria-hidden
                 className="h-2 flex-1 rounded-sm"
                 style={{
-                  background: `linear-gradient(to right, ${RAMPA_DENSIDAD.map(
+                  background: `linear-gradient(to right, ${RAMPA_CARENCIA.map(
                     (c) => `rgb(${c[0]},${c[1]},${c[2]})`,
                   ).join(',')})`,
                 }}
@@ -411,7 +411,7 @@ export default function PanelEspacial({
                 aria-hidden
                 className="h-2 flex-1 rounded-sm"
                 style={{
-                  background: `linear-gradient(to right, ${RAMPA_DENSIDAD.map(
+                  background: `linear-gradient(to right, ${RAMPA_CARENCIA.map(
                     (c) => `rgb(${c[0]},${c[1]},${c[2]})`,
                   ).join(',')})`,
                 }}
