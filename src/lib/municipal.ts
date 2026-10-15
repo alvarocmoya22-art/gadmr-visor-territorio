@@ -208,11 +208,13 @@ function nombrarBarrios(fc: GeoJSON.FeatureCollection): void {
 }
 
 /**
- * Superficie del barrio en hectáreas.
+ * Superficie en hectáreas, medida y no declarada.
  *
- * Se prefiere la calculada de la geometría: el `AREA_HA_` del shapefile
- * municipal repite los mismos 62,28 ha en 17 barrios que miden entre 1 y 11,
- * y esa cifra es la que el visor enseña junto a cada nombre.
+ * Se prefiere la calculada de la geometría porque la declarada en los
+ * shapefiles municipales no es de fiar: el `AREA_HA_` de los barrios repite
+ * los mismos 62,28 ha en 17 barrios que miden entre 1 y 11, y el `Area` de las
+ * plataformas da 158,148 ha para la K, que mide 145,72. Un 8,5 % de más en una
+ * cifra que el visor enseña en el selector, en la tabla y en la franja.
  */
 const areaDe = (p: Record<string, unknown>): number =>
   Number(p.area_ha_geom ?? p.area_ha ?? 0)
@@ -282,7 +284,7 @@ function aPlataformas(fc: GeoJSON.FeatureCollection): Plataforma[] {
       return {
         clave: String(p.clave ?? ''),
         nombre: String(p.nombre ?? ''),
-        areaHa: Number(p.area_ha ?? 0),
+        areaHa: areaDe(p),
         rotulo: [Number(p.rotulo_lon), Number(p.rotulo_lat)] as [number, number],
         poligonos,
         caja: cajaDe(poligonos.flat()),
