@@ -340,6 +340,56 @@ function parroquiasDelAmbito(
   return capas.parroquias
 }
 
+/**
+ * El ancho de la via, segun su tipo y el zoom.
+ *
+ * Crece al acercarse porque la capa se mira de dos maneras: con el canton
+ * entero a la vista es una trama —donde hay red y donde no—, y de cerca es
+ * una via concreta con su capa de rodadura.
+ *
+ * `extra` es lo que se le suma al halo para que sea un filete de un pixel por
+ * lado. Va aqui y no en cada capa para que no puedan separarse: un halo que
+ * no siga al ancho de la via deja de ser un filete.
+ */
+function anchoDeVia(extra: number): ExpressionSpecification {
+  /*
+   * El `case` va DENTRO del `interpolate`, no al reves.
+   *
+   * MapLibre solo admite una interpolacion por zoom en cada expresion, asi
+   * que un `case` con dos ramas interpoladas no es un ancho mas complicado:
+   * es invalido. Lo dijo en la consola —«Only one zoom-based interpolate
+   * subexpression may be used»— y el resultado fue que la capa entera se
+   * dibujo sin ancho y la red vial no se veia, sin nada en pantalla que lo
+   * explicara.
+   */
+  const paso = (provincial: number, estatal: number): ExpressionSpecification =>
+    ['case', ['==', ['get', 'tipo'], 'estatal'], estatal + extra, provincial + extra] as unknown as ExpressionSpecification
+  return [
+    'interpolate',
+    ['linear'],
+    ['zoom'],
+    9, paso(1.6, 2.8),
+    12, paso(2.4, 4.2),
+    16, paso(4, 7),
+  ] as unknown as ExpressionSpecification
+}
+
+/** El color de una via segun su capa de rodadura, leido de los tokens. */
+function colorDeRodadura(): ExpressionSpecification {
+  const raiz = getComputedStyle(document.documentElement)
+  const paso = (c: string) => raiz.getPropertyValue(`--gr-rodadura-${c}`).trim()
+  return [
+    'match',
+    ['get', 'rodadura'],
+    'ASFALTO', paso('asfalto'),
+    'ADOQUINADO', paso('adoquinado'),
+    'EMPEDRADO', paso('empedrado'),
+    'LASTRADO', paso('lastrado'),
+    'TIERRA', paso('tierra'),
+    paso('sin-dato'),
+  ] as unknown as ExpressionSpecification
+}
+
 function expresionColor(): ExpressionSpecification {
   const paleta = paletaResuelta()
   const pares = CATEGORIAS.flatMap((c) => [c.clave, paleta[c.clave]])
@@ -391,7 +441,7 @@ function aplicarColoresTema(m: maplibregl.Map) {
   pintar('barrios-relleno', 'fill-color', leer('--gr-limite-barrio'))
   pintar('barrios-etiqueta', 'text-color', leer('--gr-limite-barrio'))
   pintar('red-vial-halo', 'line-color', leer('--gr-red-vial-halo'))
-  pintar('red-vial-linea', 'line-color', leer('--gr-red-vial'))
+  pintar('red-vial-linea', 'line-color', colorDeRodadura())
   pintar('suelo-relleno', 'fill-color', leer('--gr-suelo-relleno'))
   pintar('parroquias-linea', 'line-color', leer('--gr-limite-parroquia'))
   pintar('plataformas-relleno', 'fill-color', azul)
@@ -759,8 +809,26 @@ export default function Mapa({
         layout: { visibility: 'none', 'line-join': 'round', 'line-cap': 'round' },
         paint: {
           'line-color': raiz.getPropertyValue('--gr-red-vial-halo').trim(),
-          'line-width': ['case', ['==', ['get', 'tipo'], 'estatal'], 5.5, 3],
-          'line-opacity': 0.55,
+          // Dos pixeles mas ancho que la via y ni uno mas: es un filete, no
+          // un fondo. Con el halo mas grueso —lo estuvo— la via se veia
+          // blanca con un asomo de color y la capa de rodadura no se leia.
+          'line-width': anchoDeVia(2),
+          /*
+           * OPACO del todo, y no es un detalle: es lo unico que hace legible
+           * la capa de rodadura.
+           *
+           * El halo se dibuja debajo de la via y sobre su mismo trazado, asi
+           * que si tapa, el fondo de la via es el halo y no el lienzo. Sin
+           * eso no hay rampa que valga: comprobado, el extremo oscuro de
+           * cualquier rampa queda a 1,5:1 sobre el lienzo oscuro y el claro a
+           * 1,1:1 sobre el claro. No es cuestion de elegir mejor los tonos,
+           * es que una rampa de claro a oscuro no puede tener las dos puntas
+           * legibles sobre dos fondos opuestos.
+           *
+           * Con el halo opaco el fondo es el mismo —#f2efe9— en los dos
+           * lienzos, y una sola rampa sirve para ambos.
+           */
+          'line-opacity': 1,
         },
       })
       m.addLayer({
@@ -769,8 +837,8 @@ export default function Mapa({
         source: 'redVial',
         layout: { visibility: 'none', 'line-join': 'round', 'line-cap': 'round' },
         paint: {
-          'line-color': raiz.getPropertyValue('--gr-red-vial').trim(),
-          'line-width': ['case', ['==', ['get', 'tipo'], 'estatal'], 2.6, 1.3],
+          'line-color': colorDeRodadura(),
+          'line-width': anchoDeVia(0),
           'line-opacity': 0.95,
         },
       })

@@ -27,6 +27,24 @@ interface Props {
   onCapas: (c: CapasVisibles) => void
 }
 
+/**
+ * La leyenda de la capa de rodadura, en el orden de la rampa.
+ *
+ * Va EN ORDEN, de la mejor a la peor, porque el color es una rampa de un solo
+ * tono y es el orden lo que lo hace legible: sin leyenda, cinco verdes
+ * seguidos no dicen nada. Lo oscuro es lo peor a proposito —la via de tierra
+ * es la que hay que ver primero—, y el «sin dato» va aparte, en gris, porque
+ * no es una calidad peor sino una ausencia.
+ */
+const RODADURAS: { clave: string; rotulo: string }[] = [
+  { clave: 'asfalto', rotulo: 'Asfalto' },
+  { clave: 'adoquinado', rotulo: 'Adoquinado' },
+  { clave: 'empedrado', rotulo: 'Empedrado' },
+  { clave: 'lastrado', rotulo: 'Lastrado' },
+  { clave: 'tierra', rotulo: 'Tierra' },
+  { clave: 'sin-dato', rotulo: 'Sin dato' },
+]
+
 const CAPAS: { clave: keyof CapasVisibles; rotulo: string }[] = [
   { clave: 'osm', rotulo: 'Registros de OpenStreetMap' },
   { clave: 'plataformas', rotulo: 'Plataformas' },
@@ -243,6 +261,22 @@ export default function Filtros({
                   )}
                   {inerte && <span className="gr-chip gr-chip--aviso">sin token</span>}
                 </label>
+                {/* La leyenda solo con la capa encendida: ocupa seis lineas y
+                    sin la capa en el mapa no explica nada. */}
+                {c.clave === 'redVial' && capas.redVial && (
+                  <ul className="mb-1 ml-5 mt-1 space-y-0.5">
+                    {RODADURAS.map((r) => (
+                      <li key={r.clave} className="flex items-center gap-2 text-[12px]">
+                        <span
+                          aria-hidden
+                          className="h-0.5 w-5 shrink-0 rounded-full"
+                          style={{ background: `var(--gr-rodadura-${r.clave})` }}
+                        />
+                        <span style={{ color: 'var(--gr-tinta-3)' }}>{r.rotulo}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </li>
             )
           })}

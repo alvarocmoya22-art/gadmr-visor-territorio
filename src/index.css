@@ -75,8 +75,31 @@
      no se puede confundir con una linea de reparto. Fijo, no cambia con el
      tema, por la misma razon que los otros: su fondo es el lienzo del mapa.
      El halo claro es lo que la sostiene sobre la mancha ocre del suelo. */
-  --gr-red-vial: #15756a;
   --gr-red-vial-halo: #f2efe9;
+
+  /* La via se tine por su CAPA DE RODADURA, que es lo que esta capa sabe y
+     ninguna otra: 311 km de tierra, 286 de lastrado, 188 de asfalto.
+
+     Rampa ORDINAL de un solo tono, de claro a oscuro, porque las cinco clases
+     estan ordenadas —asfalto, adoquinado, empedrado, lastrado, tierra— y no
+     son categorias sueltas. Lo oscuro es lo peor a proposito: la via de
+     tierra es la que hay que ver primero en un mapa de planificacion.
+
+     Los cinco pasos estan COMPROBADOS, no elegidos a ojo: un tono (4 deg de
+     dispersion), claridad monotona, saltos de claridad por encima de 0,06 y
+     el paso mas claro a 2,59:1 sobre el halo del lienzo oscuro y 3,22:1 sobre
+     el del claro —el minimo es 2:1—.
+
+     Y por eso el halo va al 80 %: es lo que hace que el fondo de la linea sea
+     el mismo en los dos lienzos, y asi una sola rampa vale para los dos en
+     vez de dos juegos de color. Sin dato se queda fuera de la rampa, en gris:
+     no es una calidad peor, es una ausencia. */
+  --gr-rodadura-asfalto: #2e9183;
+  --gr-rodadura-adoquinado: #1b7a6d;
+  --gr-rodadura-empedrado: #0f6256;
+  --gr-rodadura-lastrado: #084a40;
+  --gr-rodadura-tierra: #04332b;
+  --gr-rodadura-sin-dato: #8b8780;
 }
 
 @media (prefers-color-scheme: dark) {
