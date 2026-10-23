@@ -148,6 +148,20 @@ export interface CapasMunicipales {
   barriosLista: Barrio[]
   equipamientos: EquipamientoMunicipal[]
   parroquias: GeoJSON.FeatureCollection
+  /**
+   * El canton entero: las cinco parroquias urbanas y las doce rurales.
+   *
+   * `parroquias` son solo las cinco urbanas, que es lo que trae el shapefile
+   * de PLATAFORMAS y lo que hace falta dentro de la ciudad. Pero el ambito
+   * «Todo el canton (urbano y rural)» del filtro habla de 99.780 ha, y sin
+   * esta capa no habia con que dibujarlas ni donde encuadrar: al elegirlo, el
+   * mapa se quedaba en la ciudad y el titulo decia «cantón».
+   *
+   * null si el archivo no esta; entonces ese ambito se comporta como antes.
+   */
+  canton: GeoJSON.FeatureCollection | null
+  /** La caja del canton, para encuadrarlo. null si no hay capa. */
+  cajaCanton: Caja | null
   barrios: GeoJSON.FeatureCollection
   plataformasGeo: GeoJSON.FeatureCollection
   /** null si el archivo no esta; el visor sigue funcionando sin poblacion. */
@@ -396,7 +410,7 @@ async function traerProyectos(): Promise<GeoJSON.FeatureCollection | null> {
 }
 
 export async function cargarCapas(): Promise<CapasMunicipales> {
-  const [plataformasGeo, parroquias, barrios, equipamientosGeo, poblacion, proyectosGeo] =
+  const [plataformasGeo, parroquias, barrios, equipamientosGeo, poblacion, proyectosGeo, canton] =
     await Promise.all([
       traer('plataformas'),
       traer('parroquias'),
@@ -404,7 +418,14 @@ export async function cargarCapas(): Promise<CapasMunicipales> {
       traer('equipamientos'),
       traerPoblacion(),
       traerProyectos(),
+      // Opcional a proposito: si falta, el visor entero sigue abriendo y solo
+      // el ambito del canton se queda como estaba.
+      traer('parroquias_canton').catch(() => null),
     ])
+
+  const cajaCanton = canton
+    ? cajaDe(canton.features.flatMap((f) => (f.geometry ? poligonosDe(f.geometry).flat() : [])))
+    : null
 
   const plataformas = aPlataformas(plataformasGeo)
   nombrarBarrios(barrios)
@@ -482,6 +503,8 @@ export async function cargarCapas(): Promise<CapasMunicipales> {
     barriosLista,
     equipamientos,
     parroquias,
+    canton,
+    cajaCanton,
     barrios,
     plataformasGeo,
     poblacion,

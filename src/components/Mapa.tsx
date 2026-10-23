@@ -299,7 +299,16 @@ function cajaDelAmbito(
   capas: CapasMunicipales | null,
 ): [number, number, number, number] | null {
   const lista = capas?.plataformas ?? []
-  if (!activa || lista.length === 0) return null
+  /*
+   * Sin plataforma elegida el ambito es «Todo el canton (urbano y rural)», y
+   * ahi se encuadra el canton entero.
+   *
+   * Antes esto devolvia null y el mapa no se movia: se elegia el canton, la
+   * franja pasaba a decir 99.780 ha y el mapa seguia encima de la ciudad, que
+   * son 3.552. Lo que se leia y lo que se veia no hablaban del mismo sitio.
+   */
+  if (!activa) return capas?.cajaCanton ?? null
+  if (lista.length === 0) return null
   const cajas =
     activa === URBANO ? lista.map((p) => p.caja) : lista.filter((p) => p.clave === activa).map((p) => p.caja)
   if (cajas.length === 0) return null
@@ -309,6 +318,22 @@ function cajaDelAmbito(
     Math.max(...cajas.map((c) => c[2])),
     Math.max(...cajas.map((c) => c[3])),
   ]
+}
+
+/**
+ * Que parroquias dibujar, segun el ambito.
+ *
+ * `parroquias` son las cinco urbanas, que es lo que importa dentro de la
+ * ciudad. Mirando el canton entero, esas cinco son una mancha en una esquina
+ * y las once rurales —donde esta el 96 % del territorio— no se dibujaban:
+ * el ambito decia «urbano y rural» y de lo rural no se veia ni el contorno.
+ */
+function parroquiasDelAmbito(
+  activa: string | null,
+  capas: CapasMunicipales,
+): GeoJSON.FeatureCollection {
+  if (!activa && capas.canton) return capas.canton
+  return capas.parroquias
 }
 
 function expresionColor(): ExpressionSpecification {
@@ -1239,7 +1264,7 @@ export default function Mapa({
         capasMunicipales.plataformasGeo,
       )
       ;(m.getSource('parroquias') as maplibregl.GeoJSONSource | undefined)?.setData(
-        capasMunicipales.parroquias,
+        parroquiasDelAmbito(plataformaActiva, capasMunicipales),
       )
       ;(m.getSource('barrios') as maplibregl.GeoJSONSource | undefined)?.setData(
         capasMunicipales.barrios,
@@ -1256,7 +1281,10 @@ export default function Mapa({
         return new maplibregl.Marker({ element: el }).setLngLat(p.rotulo).addTo(m)
       })
     })
-  }, [capasMunicipales, mapaListo])
+    // `plataformaActiva` entra en la lista porque la capa de parroquias
+    // cambia con el ambito: las cinco urbanas dentro de la ciudad, las
+    // diecisiete del canton cuando se mira el canton.
+  }, [capasMunicipales, plataformaActiva, mapaListo])
 
   // Inventario municipal (su color depende del cotejo, que cambia con OSM)
   useEffect(() => {

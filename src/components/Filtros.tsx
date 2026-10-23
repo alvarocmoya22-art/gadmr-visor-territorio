@@ -30,7 +30,7 @@ interface Props {
 const CAPAS: { clave: keyof CapasVisibles; rotulo: string }[] = [
   { clave: 'osm', rotulo: 'Registros de OpenStreetMap' },
   { clave: 'plataformas', rotulo: 'Plataformas' },
-  { clave: 'parroquias', rotulo: 'Parroquias urbanas' },
+  { clave: 'parroquias', rotulo: 'Parroquias' },
   { clave: 'barrios', rotulo: 'Barrios' },
   { clave: 'equipamientos', rotulo: 'Equipamientos del GADM' },
   { clave: 'edificios', rotulo: 'Edificación en 3D' },
@@ -230,6 +230,15 @@ export default function Filtros({
                     onChange={(e) => onCapas({ ...capas, [c.clave]: e.target.checked })}
                   />
                   {c.rotulo}
+                  {/* La capa de parroquias cambia con el ambito: las cinco
+                      urbanas dentro de la ciudad, las diecisiete del canton
+                      al mirarlo entero. El rotulo lo dice para que la casilla
+                      no prometa una cosa y el mapa dibuje otra. */}
+                  {c.clave === 'parroquias' && (
+                    <span style={{ color: 'var(--gr-tinta-3)' }}>
+                      {filtros.plataforma === null ? '· las 17 del cantón' : '· las 5 urbanas'}
+                    </span>
+                  )}
                   {inerte && <span className="gr-chip gr-chip--aviso">sin token</span>}
                 </label>
               </li>
