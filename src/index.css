@@ -47,6 +47,15 @@
      NO cambia con el tema: el mapa base de OSM es siempre claro, asi que un
      tono claro «para tema oscuro» se perderia justo sobre el. */
   --gr-limite-barrio: #8e2f8a;
+
+  /* Limite de parroquia: el escalon de arriba del barrio, con color propio
+     por el mismo motivo y por la misma regla —no cambia con el tema—.
+     Estaba en `--gr-tinta-3`, el gris del texto secundario: sobre el lienzo
+     gris del mapa no se distinguia de una carretera menor, y con el canton
+     entero en pantalla esas diecisiete lineas son el dibujo principal.
+     Ocre, que no choca con el azul de la plataforma ni con el magenta del
+     barrio y se sostiene sobre los dos lienzos, el claro y el oscuro. */
+  --gr-limite-parroquia: #c07830;
 }
 
 @media (prefers-color-scheme: dark) {

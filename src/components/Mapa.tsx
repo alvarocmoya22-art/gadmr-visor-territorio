@@ -378,7 +378,6 @@ function aplicarColoresTema(m: maplibregl.Map) {
   const raiz = getComputedStyle(document.documentElement)
   const leer = (v: string) => raiz.getPropertyValue(v).trim()
   const azul = leer('--gr-info')
-  const tinta3 = leer('--gr-tinta-3')
 
   const pintar = (capa: string, prop: string, valor: unknown) => {
     if (m.getLayer(capa)) m.setPaintProperty(capa, prop, valor as never)
@@ -387,7 +386,7 @@ function aplicarColoresTema(m: maplibregl.Map) {
   pintar('barrios-linea', 'line-color', leer('--gr-limite-barrio'))
   pintar('barrios-relleno', 'fill-color', leer('--gr-limite-barrio'))
   pintar('barrios-etiqueta', 'text-color', leer('--gr-limite-barrio'))
-  pintar('parroquias-linea', 'line-color', tinta3)
+  pintar('parroquias-linea', 'line-color', leer('--gr-limite-parroquia'))
   pintar('plataformas-relleno', 'fill-color', azul)
   pintar('plataformas-halo', 'line-color', leer('--gr-superficie'))
   pintar('plataformas-linea', 'line-color', azul)
@@ -507,6 +506,7 @@ export default function Mapa({
       const azul = raiz.getPropertyValue('--gr-info').trim()
       const tinta3 = raiz.getPropertyValue('--gr-tinta-3').trim()
       const limiteBarrio = raiz.getPropertyValue('--gr-limite-barrio').trim()
+      const limiteParroquia = raiz.getPropertyValue('--gr-limite-parroquia').trim()
 
       // ── Déficit de equipamiento por barrio. Se declara la primera para
       // que quede por debajo de los límites y de los puntos: es un fondo que
@@ -610,7 +610,7 @@ export default function Mapa({
         type: 'line',
         source: 'parroquias',
         layout: { visibility: 'none', 'line-join': 'round' },
-        paint: { 'line-color': tinta3, 'line-width': 1.6, 'line-dasharray': [3, 2] },
+        paint: { 'line-color': limiteParroquia, 'line-width': 1.6, 'line-dasharray': [3, 2] },
       })
 
       m.addSource('plataformas', { type: 'geojson', data: VACIO, promoteId: 'clave' })
