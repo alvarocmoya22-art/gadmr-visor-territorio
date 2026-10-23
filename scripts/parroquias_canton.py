@@ -111,9 +111,32 @@ todo = gpd.GeoDataFrame(
     __import__("pandas").concat([u, r, resto], ignore_index=True), crs=4326
 )
 
+
+
 # Simplificado en metros, como el resto de capas del visor: sin esto son
 # 1,7 MB de vértices para dibujar dieciséis contornos.
 todo["geometry"] = todo.to_crs(32717).geometry.simplify(5).to_crs(4326)
+
+# Las rurales se recortan contra las urbanas, para que el reparto sea limpio.
+#
+# VA DESPUÉS DE SIMPLIFICAR. Al revés, la simplificación vuelve a mover las
+# líneas y reaparecen 0,6 ha de solape: recortar algo que luego se va a
+# redibujar no sirve de nada.
+#
+# Las urbanas vienen de un shapefile y las rurales de la base: dos dibujos del
+# mismo límite que no coinciden, y por ahí se solapaban 9,79 ha —9,49 de ellas
+# con Licán—. Parece poco y se nota: la plataforma D cae 99,9 % en Lizarzaburu
+# pero pisaba 8 ha de ese solape, así que al elegirla en CHASKI aparecía Licán
+# entera al lado, sin que nada explicara por qué.
+#
+# Manda el dibujo urbano dentro de la ciudad, que es el que usa Planificación.
+_m = todo.to_crs(32717)
+_urb = _m.loc[todo["tipo"] == "urbana"].geometry.union_all()
+_antes = _m.geometry.area.sum()
+_rec = _m.geometry.where(todo["tipo"] == "urbana", _m.geometry.difference(_urb))
+todo["geometry"] = gpd.GeoSeries(_rec, crs=32717).to_crs(4326)
+_quitado = (_antes - todo.to_crs(32717).geometry.area.sum()) / 10000
+print(f"  solape quitado a las rurales: {_quitado:.2f} ha")
 
 # La superficie, medida sobre la proyección métrica local y no sobre grados.
 metrico = todo.to_crs(32717)
