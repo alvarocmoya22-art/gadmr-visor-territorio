@@ -160,6 +160,16 @@ export interface CapasMunicipales {
    * null si el archivo no esta; entonces ese ambito se comporta como antes.
    */
   canton: GeoJSON.FeatureCollection | null
+  /**
+   * La clasificacion del suelo: el reparto oficial entre urbano y rural.
+   *
+   * 41 piezas —27 rurales con 96.316 ha y 14 urbanas con 3.555— que cubren el
+   * canton entero sin solaparse ni un metro. Lo urbano NO es solo la ciudad:
+   * son 3.095 ha de casco mas trece cabeceras de parroquias rurales.
+   *
+   * null si el archivo no esta; la capa simplemente no se dibuja.
+   */
+  suelo: GeoJSON.FeatureCollection | null
   /** La caja del canton, para encuadrarlo. null si no hay capa. */
   cajaCanton: Caja | null
   barrios: GeoJSON.FeatureCollection
@@ -410,7 +420,7 @@ async function traerProyectos(): Promise<GeoJSON.FeatureCollection | null> {
 }
 
 export async function cargarCapas(): Promise<CapasMunicipales> {
-  const [plataformasGeo, parroquias, barrios, equipamientosGeo, poblacion, proyectosGeo, canton] =
+  const [plataformasGeo, parroquias, barrios, equipamientosGeo, poblacion, proyectosGeo, canton, suelo] =
     await Promise.all([
       traer('plataformas'),
       traer('parroquias'),
@@ -421,6 +431,7 @@ export async function cargarCapas(): Promise<CapasMunicipales> {
       // Opcional a proposito: si falta, el visor entero sigue abriendo y solo
       // el ambito del canton se queda como estaba.
       traer('parroquias_canton').catch(() => null),
+      traer('clasificacion_suelo').catch(() => null),
     ])
 
   const cajaCanton = canton
@@ -505,6 +516,7 @@ export async function cargarCapas(): Promise<CapasMunicipales> {
     parroquias,
     canton,
     cajaCanton,
+    suelo,
     barrios,
     plataformasGeo,
     poblacion,

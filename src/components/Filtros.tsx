@@ -31,6 +31,7 @@ const CAPAS: { clave: keyof CapasVisibles; rotulo: string }[] = [
   { clave: 'osm', rotulo: 'Registros de OpenStreetMap' },
   { clave: 'plataformas', rotulo: 'Plataformas' },
   { clave: 'parroquias', rotulo: 'Parroquias' },
+  { clave: 'suelo', rotulo: 'Clasificación del suelo' },
   { clave: 'barrios', rotulo: 'Barrios' },
   { clave: 'equipamientos', rotulo: 'Equipamientos del GADM' },
   { clave: 'edificios', rotulo: 'Edificación en 3D' },

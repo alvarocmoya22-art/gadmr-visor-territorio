@@ -66,6 +66,8 @@ export interface CapasVisibles {
   mapillary: boolean
   plataformas: boolean
   parroquias: boolean
+  /** El reparto oficial del canton entre suelo urbano y suelo rural. */
+  suelo: boolean
   barrios: boolean
   equipamientos: boolean
   /** Volumen construido de OpenStreetMap, extruido. */
@@ -386,6 +388,7 @@ function aplicarColoresTema(m: maplibregl.Map) {
   pintar('barrios-linea', 'line-color', leer('--gr-limite-barrio'))
   pintar('barrios-relleno', 'fill-color', leer('--gr-limite-barrio'))
   pintar('barrios-etiqueta', 'text-color', leer('--gr-limite-barrio'))
+  pintar('suelo-relleno', 'fill-color', leer('--gr-suelo-relleno'))
   pintar('parroquias-linea', 'line-color', leer('--gr-limite-parroquia'))
   pintar('plataformas-relleno', 'fill-color', azul)
   pintar('plataformas-halo', 'line-color', leer('--gr-superficie'))
@@ -603,6 +606,42 @@ export default function Mapa({
           'text-halo-width': 1.6,
         },
       })
+
+      /*
+       * La clasificacion del suelo, debajo de TODO lo demas con `beforeId`.
+       *
+       * Es el suelo del mapa, no una capa mas: si se dibujara en su sitio de
+       * la lista taparia las coropletas de analisis, que son justamente lo
+       * que hay que leer encima del territorio.
+       */
+      m.addSource('suelo', { type: 'geojson', data: VACIO })
+      m.addLayer(
+        {
+          id: 'suelo-relleno',
+          type: 'fill',
+          source: 'suelo',
+          layout: { visibility: 'none' },
+          paint: {
+            'fill-color': raiz.getPropertyValue('--gr-suelo-relleno').trim(),
+            'fill-opacity': 0.22,
+          },
+        },
+        'deficit-relleno',
+      )
+      m.addLayer(
+        {
+          id: 'suelo-linea',
+          type: 'line',
+          source: 'suelo',
+          layout: { visibility: 'none', 'line-join': 'round' },
+          paint: {
+            'line-color': raiz.getPropertyValue('--gr-suelo-linea-sobre-oscuro').trim(),
+            'line-width': 1.1,
+            'line-opacity': 0.85,
+          },
+        },
+        'deficit-relleno',
+      )
 
       m.addSource('parroquias', { type: 'geojson', data: VACIO })
       m.addLayer({
@@ -1230,6 +1269,28 @@ export default function Mapa({
           if (m.getLayer(capa)) m.setLayoutProperty(capa, 'visibility', ver)
         }
       }
+
+      /*
+       * La linea del suelo se aclara o se oscurece con el LIENZO.
+       *
+       * No con el tema de la interfaz: se dibuja sobre el relleno ocre, que es
+       * translucido, asi que su fondo real es el lienzo. Con un solo tono
+       * claro, al pasar a «Gris claro» las divisiones se perdian y el canton
+       * quedaba como una mancha sin reparto.
+       */
+      if (m.getLayer('suelo-linea')) {
+        const raiz = getComputedStyle(document.documentElement)
+        const oscuro = MAPAS_BASE.find((b) => b.clave === mapaBase)?.oscuro
+        m.setPaintProperty(
+          'suelo-linea',
+          'line-color',
+          raiz
+            .getPropertyValue(
+              oscuro ? '--gr-suelo-linea-sobre-oscuro' : '--gr-suelo-linea-sobre-claro',
+            )
+            .trim(),
+        )
+      }
     })
   }, [mapaBase, mapaListo])
 
@@ -1262,6 +1323,9 @@ export default function Mapa({
     cuandoListo((m) => {
       ;(m.getSource('plataformas') as maplibregl.GeoJSONSource | undefined)?.setData(
         capasMunicipales.plataformasGeo,
+      )
+      ;(m.getSource('suelo') as maplibregl.GeoJSONSource | undefined)?.setData(
+        capasMunicipales.suelo ?? VACIO,
       )
       ;(m.getSource('parroquias') as maplibregl.GeoJSONSource | undefined)?.setData(
         parroquiasDelAmbito(plataformaActiva, capasMunicipales),
@@ -1688,6 +1752,8 @@ export default function Mapa({
       poner('plataformas-relleno', capas.plataformas)
       poner('plataformas-halo', capas.plataformas)
       poner('plataformas-linea', capas.plataformas)
+      poner('suelo-relleno', capas.suelo)
+      poner('suelo-linea', capas.suelo)
       poner('parroquias-linea', capas.parroquias)
       poner('barrios-relleno', capas.barrios)
       poner('barrios-halo', capas.barrios)

@@ -56,6 +56,19 @@
      Ocre, que no choca con el azul de la plataforma ni con el magenta del
      barrio y se sostiene sobre los dos lienzos, el claro y el oscuro. */
   --gr-limite-parroquia: #c07830;
+
+  /* Clasificacion del suelo: se dibuja como MASA, no como raya. Es el reparto
+     oficial del canton entre urbano y rural, y lo que hace es tenir el
+     territorio para que se vea de un golpe donde acaba Riobamba y empieza
+     Chambo o Guano, que sobre el lienzo a secas no se distingue.
+
+     La linea que separa las piezas sigue al LIENZO del mapa, no al tema de la
+     interfaz: el ocre es translucido, asi que su fondo real es el lienzo, y
+     una linea clara que sobre el oscuro se lee sola sobre el claro
+     desaparece. Comprobado en los dos; por eso hay dos tonos. */
+  --gr-suelo-relleno: #c07830;
+  --gr-suelo-linea-sobre-oscuro: #e8dccb;
+  --gr-suelo-linea-sobre-claro: #7a4512;
 }
 
 @media (prefers-color-scheme: dark) {

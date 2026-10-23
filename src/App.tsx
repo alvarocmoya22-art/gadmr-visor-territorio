@@ -61,6 +61,7 @@ const CAPAS_INICIALES: CapasVisibles = {
   mapillary: hayTokenMapillary,
   plataformas: true,
   parroquias: false,
+  suelo: false,
   barrios: false,
   equipamientos: true,
   // Apagada al entrar: son dos megas que solo se descargan si se enciende.
