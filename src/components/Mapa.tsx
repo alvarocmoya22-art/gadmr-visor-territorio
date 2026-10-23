@@ -68,6 +68,8 @@ export interface CapasVisibles {
   parroquias: boolean
   /** El reparto oficial del canton entre suelo urbano y suelo rural. */
   suelo: boolean
+  /** La red vial oficial del canton, la del GADPCH. */
+  redVial: boolean
   barrios: boolean
   equipamientos: boolean
   /** Volumen construido de OpenStreetMap, extruido. */
@@ -388,6 +390,8 @@ function aplicarColoresTema(m: maplibregl.Map) {
   pintar('barrios-linea', 'line-color', leer('--gr-limite-barrio'))
   pintar('barrios-relleno', 'fill-color', leer('--gr-limite-barrio'))
   pintar('barrios-etiqueta', 'text-color', leer('--gr-limite-barrio'))
+  pintar('red-vial-halo', 'line-color', leer('--gr-red-vial-halo'))
+  pintar('red-vial-linea', 'line-color', leer('--gr-red-vial'))
   pintar('suelo-relleno', 'fill-color', leer('--gr-suelo-relleno'))
   pintar('parroquias-linea', 'line-color', leer('--gr-limite-parroquia'))
   pintar('plataformas-relleno', 'fill-color', azul)
@@ -737,6 +741,40 @@ export default function Mapa({
        * la vista cuesta lo mismo y no se distingue un predio de otro: a esa
        * escala la respuesta correcta es no dibujarlos.
        */
+      /*
+       * ── Red vial oficial del canton (GADPCH).
+       *
+       * Con halo: la via se dibuja encima de la mancha ocre del suelo, y una
+       * linea de color sobre un relleno del mismo valor se pierde. El halo
+       * claro la separa de lo que tenga debajo, sea el lienzo o la mancha.
+       *
+       * La estatal va mas gruesa que la provincial porque lo es: trece tramos
+       * que cruzan el canton frente a mil doscientos de red rural.
+       */
+      m.addSource('redVial', { type: 'geojson', data: VACIO })
+      m.addLayer({
+        id: 'red-vial-halo',
+        type: 'line',
+        source: 'redVial',
+        layout: { visibility: 'none', 'line-join': 'round', 'line-cap': 'round' },
+        paint: {
+          'line-color': raiz.getPropertyValue('--gr-red-vial-halo').trim(),
+          'line-width': ['case', ['==', ['get', 'tipo'], 'estatal'], 5.5, 3],
+          'line-opacity': 0.55,
+        },
+      })
+      m.addLayer({
+        id: 'red-vial-linea',
+        type: 'line',
+        source: 'redVial',
+        layout: { visibility: 'none', 'line-join': 'round', 'line-cap': 'round' },
+        paint: {
+          'line-color': raiz.getPropertyValue('--gr-red-vial').trim(),
+          'line-width': ['case', ['==', ['get', 'tipo'], 'estatal'], 2.6, 1.3],
+          'line-opacity': 0.95,
+        },
+      })
+
       m.addSource('catastro', { type: 'geojson', data: VACIO })
       m.addLayer({
         id: 'catastro-linea',
@@ -1690,6 +1728,44 @@ export default function Mapa({
   }, [capas.edificios, capasMunicipales, mapaListo])
 
   /*
+   * La red vial del GADPCH son seiscientos kilobytes y se descarga la primera
+   * vez que alguien la enciende, igual que el catastro y la edificacion.
+   *
+   * Viene apagada, asi que cargarla al abrir seria media descarga de mas para
+   * todo el mundo a cambio de nada.
+   */
+  const redVialGeo = useRef<GeoJSON.FeatureCollection | null>(null)
+  const [redVialLista, setRedVialLista] = useState(false)
+
+  useEffect(() => {
+    if (!capas.redVial || redVialGeo.current) return
+    let vivo = true
+    void (async () => {
+      try {
+        const resp = await fetch(`${import.meta.env.BASE_URL}datos/red_vial.geojson`, {
+          cache: 'force-cache',
+        })
+        if (!resp.ok || !vivo) return
+        redVialGeo.current = (await resp.json()) as GeoJSON.FeatureCollection
+        if (vivo) setRedVialLista(true)
+      } catch {
+        // Sin red vial el visor sigue entero; no hay nada que avisar.
+      }
+    })()
+    return () => {
+      vivo = false
+    }
+  }, [capas.redVial])
+
+  useEffect(() => {
+    if (!redVialLista || !redVialGeo.current) return
+    cuandoListo((m) => {
+      const fuente = m.getSource('redVial') as maplibregl.GeoJSONSource | undefined
+      if (fuente && redVialGeo.current) fuente.setData(redVialGeo.current)
+    })
+  }, [redVialLista, mapaListo])
+
+  /*
    * El catastro son catorce megas en claro —menos de dos al viajar comprimido—
    * y se descarga la primera vez que alguien lo enciende, igual que la
    * edificacion y la red peatonal.
@@ -1762,6 +1838,8 @@ export default function Mapa({
       poner('equipamientos', capas.equipamientos)
       poner('edificios-3d', capas.edificios)
       poner('proyectos', capas.proyectos)
+      poner('red-vial-halo', capas.redVial)
+      poner('red-vial-linea', capas.redVial)
       poner('catastro-linea', capas.catastro)
       poner('proyectos-icono', capas.proyectos)
       poner('proyectos-etiqueta', capas.proyectos)

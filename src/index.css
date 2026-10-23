@@ -69,6 +69,14 @@
   --gr-suelo-relleno: #c07830;
   --gr-suelo-linea-sobre-oscuro: #e8dccb;
   --gr-suelo-linea-sobre-claro: #7a4512;
+
+  /* Red vial oficial del GADPCH. Verde azulado: no lo usa ningun limite
+     —azul la plataforma, magenta el barrio, ocre el suelo— asi que una via
+     no se puede confundir con una linea de reparto. Fijo, no cambia con el
+     tema, por la misma razon que los otros: su fondo es el lienzo del mapa.
+     El halo claro es lo que la sostiene sobre la mancha ocre del suelo. */
+  --gr-red-vial: #15756a;
+  --gr-red-vial-halo: #f2efe9;
 }
 
 @media (prefers-color-scheme: dark) {

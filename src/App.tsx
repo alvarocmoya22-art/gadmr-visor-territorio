@@ -62,6 +62,7 @@ const CAPAS_INICIALES: CapasVisibles = {
   plataformas: true,
   parroquias: false,
   suelo: false,
+  redVial: false,
   barrios: false,
   equipamientos: true,
   // Apagada al entrar: son dos megas que solo se descargan si se enciende.

@@ -32,6 +32,7 @@ const CAPAS: { clave: keyof CapasVisibles; rotulo: string }[] = [
   { clave: 'plataformas', rotulo: 'Plataformas' },
   { clave: 'parroquias', rotulo: 'Parroquias' },
   { clave: 'suelo', rotulo: 'Clasificación del suelo' },
+  { clave: 'redVial', rotulo: 'Red vial del cantón · GADPCH' },
   { clave: 'barrios', rotulo: 'Barrios' },
   { clave: 'equipamientos', rotulo: 'Equipamientos del GADM' },
   { clave: 'edificios', rotulo: 'Edificación en 3D' },
