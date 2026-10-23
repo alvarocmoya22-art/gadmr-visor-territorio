@@ -44,7 +44,6 @@ import type { Campo } from './lib/isocronaSuperficie'
 import { avancePorPlataforma, URBANO } from './lib/municipal'
 import { VISTA_INICIAL } from './config/riobamba'
 import { MAPA_BASE_INICIAL } from './config/mapasBase'
-import { hayToken as hayTokenMapillary } from './lib/mapillary'
 import { fecha, numero, porcentaje } from './lib/format'
 import { useFotosCalle } from './hooks/useFotosCalle'
 import { recargarDeVerdad, useVersionNueva } from './hooks/useVersion'
@@ -58,7 +57,18 @@ type ClavePestana = 'filtros' | 'analisis' | 'espacial' | 'datos' | 'calle'
 
 const CAPAS_INICIALES: CapasVisibles = {
   osm: true,
-  mapillary: hayTokenMapillary,
+  /*
+   * Apagada al entrar, aunque haya token.
+   *
+   * Las secuencias de Mapillary son lineas verde oliva que siguen las calles,
+   * y con el canton entero a la vista se leen como si fueran la red vial:
+   * tapan la de verdad, la del GADPCH, y dibujan una trama donde solo hay
+   * fotos. No son vias, son por donde paso una camara.
+   *
+   * El interruptor sigue ahi y la vista de calle no cambia: lo que se apaga
+   * es el rastro sobre el mapa, no las fotos.
+   */
+  mapillary: false,
   plataformas: true,
   parroquias: false,
   suelo: false,
