@@ -1054,9 +1054,17 @@ export default function App() {
             Visor de Territorio · GADM Riobamba
           </h1>
           <p className="gr-num text-[11px]" style={{ color: 'var(--gr-tinta-3)' }}>
+            {/* Tres estados y no dos: mientras no hubiera datos, esto decia
+                «Consultando OpenStreetMap…» PARA SIEMPRE. Si Overpass se cae
+                —y se cae: comprobado en el sitio publicado, 502 y 504 en los
+                dos espejos—, el aviso de abajo dice que se rindio mientras la
+                cabecera seguia prometiendo que estaba consultando. Dos cosas
+                contrarias en la misma pantalla. */}
             {datos
               ? `Base OSM al ${fecha(datos.selloOsm ?? undefined)} · descargado ${fecha(datos.obtenido)}${datos.desdeCache ? ' (cache local)' : ''}`
-              : 'Consultando OpenStreetMap…'}
+              : estado === 'error'
+                ? 'OpenStreetMap no responde · lo del GADM sí se ve'
+                : 'Consultando OpenStreetMap…'}
           </p>
         </div>
 
