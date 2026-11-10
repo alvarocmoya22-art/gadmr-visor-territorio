@@ -263,6 +263,25 @@ export default function Filtros({
                 </label>
                 {/* La leyenda solo con la capa encendida: ocupa seis lineas y
                     sin la capa en el mapa no explica nada. */}
+                {/* Dos clases, dos tonos: sin leyenda, una mancha terracota y
+                    otra oliva no dicen cuál es cuál. */}
+                {c.clave === 'suelo' && capas.suelo && (
+                  <ul className="mb-1 ml-5 mt-1 space-y-0.5">
+                    {[
+                      { clave: 'urbano', rotulo: 'Urbano · 3.556 ha' },
+                      { clave: 'rural', rotulo: 'Rural · 96.318 ha' },
+                    ].map((s) => (
+                      <li key={s.clave} className="flex items-center gap-2 text-[12px]">
+                        <span
+                          aria-hidden
+                          className="h-2.5 w-4 shrink-0 rounded-sm"
+                          style={{ background: `var(--gr-suelo-${s.clave})`, opacity: 0.55 }}
+                        />
+                        <span style={{ color: 'var(--gr-tinta-3)' }}>{s.rotulo}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
                 {c.clave === 'redVial' && capas.redVial && (
                   <ul className="mb-1 ml-5 mt-1 space-y-0.5">
                     {RODADURAS.map((r) => (

@@ -67,6 +67,17 @@
      una linea clara que sobre el oscuro se lee sola sobre el claro
      desaparece. Comprobado en los dos; por eso hay dos tonos. */
   --gr-suelo-relleno: #c07830;
+
+  /* URBANO Y RURAL, CADA UNO EL SUYO. Se pintaban los dos del mismo ocre, asi
+     que la capa ensenaba una sola mancha y lo unico que esta capa sabe decir
+     —donde acaba lo urbano y empieza lo rural— no se veia.
+
+     Los tonos salen de la paleta de clasificacion del suelo de la LOOTUGS: el
+     terracota del suelo urbano consolidado y el oliva del rural de produccion,
+     que es lo que de verdad hay alrededor de Riobamba. Fijos, no cambian con el
+     tema, porque su fondo es el lienzo del mapa y no la interfaz. */
+  --gr-suelo-urbano: #b75c43;
+  --gr-suelo-rural: #8a8c3a;
   --gr-suelo-linea-sobre-oscuro: #e8dccb;
   --gr-suelo-linea-sobre-claro: #7a4512;
 

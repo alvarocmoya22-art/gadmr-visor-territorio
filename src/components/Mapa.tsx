@@ -695,8 +695,19 @@ export default function Mapa({
           source: 'suelo',
           layout: { visibility: 'none' },
           paint: {
-            'fill-color': raiz.getPropertyValue('--gr-suelo-relleno').trim(),
-            'fill-opacity': 0.22,
+            /*
+             * Por clase, no un ocre para todo. Lo unico que esta capa sabe
+             * decir es donde acaba lo urbano y empieza lo rural, y con un solo
+             * color eso no se ve: salia una mancha sola.
+             */
+            'fill-color': [
+              'match',
+              ['get', 'clase'],
+              'urbano', raiz.getPropertyValue('--gr-suelo-urbano').trim() || '#b75c43',
+              'rural', raiz.getPropertyValue('--gr-suelo-rural').trim() || '#8a8c3a',
+              raiz.getPropertyValue('--gr-suelo-relleno').trim(),
+            ] as unknown as ExpressionSpecification,
+            'fill-opacity': 0.26,
           },
         },
         'deficit-relleno',
@@ -1247,6 +1258,45 @@ export default function Mapa({
           )
           .addTo(m)
       })
+      /*
+       * La clasificacion del suelo, al pasar por encima.
+       *
+       * La capa traia clase, parroquia, superficie, poblacion y densidad y no
+       * habia forma de leer ninguna: se veia una mancha y nada mas. Lo que se
+       * busca mirando esta capa es justamente de que lado del reparto cae un
+       * sitio y cuanta gente vive ahi.
+       *
+       * La poblacion falta en trece de las cuarenta y una piezas, y cuando
+       * falta se dice: un cero ahi afirmaria que no vive nadie, y lo que pasa
+       * es que el reparto del Censo no alcanzo esa pieza.
+       */
+      m.on('mousemove', 'suelo-relleno', (e) => {
+        const f = e.features?.[0]
+        if (!f) return
+        m.getCanvas().style.cursor = 'pointer'
+        const clase = String(f.properties?.clase ?? '')
+        const parroquia = String(f.properties?.parroquia ?? '')
+        const ha = Number(f.properties?.area_ha ?? 0)
+        const pob = f.properties?.poblacion
+        const dens = f.properties?.densidad_hab_km2
+        const hayPob = pob !== null && pob !== undefined && pob !== ''
+        globo
+          .setLngLat(e.lngLat)
+          .setHTML(
+            `<b>Suelo ${clase}</b>${parroquia ? ` · ${parroquia}` : ''}<br>` +
+              `${ha.toLocaleString('es-EC', { maximumFractionDigits: 0 })} ha<br>` +
+              (hayPob
+                ? `${Number(pob).toLocaleString('es-EC')} habitantes` +
+                  (dens ? ` · ${Number(dens).toLocaleString('es-EC')} hab/km²` : '')
+                : 'sin población repartida en esta pieza'),
+          )
+          .addTo(m)
+      })
+      m.on('mouseleave', 'suelo-relleno', () => {
+        m.getCanvas().style.cursor = ''
+        globo.remove()
+      })
+
       m.on('mousemove', 'cobertura-relleno', (e) => {
         const f = e.features?.[0]
         if (!f) return

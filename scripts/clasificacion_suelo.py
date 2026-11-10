@@ -54,6 +54,15 @@ _urb = _m.loc[g["clase"] == "urbano"].geometry.union_all()
 _rec = _m.geometry.where(g["clase"] == "urbano", _m.geometry.difference(_urb))
 g["geometry"] = gpd.GeoSeries(_rec, crs=32717).to_crs(4326)
 
+# El recorte de arriba deja vacías las piezas rurales que caían enteras dentro
+# de lo urbano. Vacío no es cero: es un rasgo sin geometría, y así salían dos al
+# archivo publicado. GeoJSON los admite, el mapa no los dibuja y nadie se entera
+# de que están. Fuera, y se dice cuántos.
+_vacias = g.geometry.is_empty | g.geometry.isna()
+if _vacias.any():
+    print(f"  piezas que el recorte dejó vacías, se quitan: {int(_vacias.sum())}")
+    g = g.loc[~_vacias].reset_index(drop=True)
+
 metrico = g.to_crs(32717)
 g["area_ha"] = (metrico.geometry.area / 10000).round(2)
 
