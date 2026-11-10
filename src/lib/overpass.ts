@@ -1,6 +1,7 @@
 import { AREA_OVERPASS, ESPEJOS_OVERPASS, FRESCURA } from '../config/riobamba'
 import { CATEGORIAS, clasificar, POR_CLAVE, type ClaveCategoria } from './categorias'
 import { mesesDesde } from './format'
+import type { Caja } from './geo'
 
 export type Frescura = 'vigente' | 'por_vencer' | 'vencido' | 'sin_verificar'
 
@@ -20,6 +21,15 @@ export interface Punto {
   /** Campos clave de la categoría que faltan en la ficha. */
   faltantes: string[]
   completitud: number
+  /**
+   * La huella del objeto, cuando no es un nodo suelto.
+   *
+   * Se pide a Overpass con `bb` y pesa cuatro numeros por objeto, frente a los
+   * cientos de vertices que costaria `geom`. Sirve para una cosa concreta:
+   * cotejar contra la huella y no contra su centro. Para dibujar se sigue
+   * usando `lat`/`lon`, que es donde va el icono.
+   */
+  caja: Caja | null
   /** Plataforma que lo contiene; se asigna al cruzar con las capas municipales. */
   plataforma: string | null
   /** Barrio que lo contiene; se asigna igual que la plataforma. */
@@ -75,15 +85,18 @@ area(${AREA_OVERPASS})->.rio;
 (
 ${cuerpo}
 );
-out tags center qt;`
+out tags bb qt;`
 }
 
-interface ElementoOverpass {
+export interface ElementoOverpass {
   type: 'node' | 'way' | 'relation'
   id: number
   lat?: number
   lon?: number
+  /** Lo devolvia el `center`; se conserva por si un espejo responde con el. */
   center?: { lat: number; lon: number }
+  /** Caja envolvente de ways y relations; la pide el `bb` de la consulta. */
+  bounds?: { minlat: number; minlon: number; maxlat: number; maxlon: number }
   tags?: Record<string, string>
 }
 
@@ -102,9 +115,26 @@ function frescuraDe(checkDate: string | undefined): Frescura {
   return 'vencido'
 }
 
-function normalizar(e: ElementoOverpass): Punto | null {
-  const lat = e.lat ?? e.center?.lat
-  const lon = e.lon ?? e.center?.lon
+/**
+ * SE PIDE `bb` Y NO `center`, y no son dos cosas distintas: `center` es
+ * literalmente el centro de la caja que devuelve `bb`, asi que pedir la caja
+ * da lo mismo que habia y ademas la huella.
+ *
+ * Overpass solo admite UN modo de geometria por `out` —«one of the following
+ * modificators for geolocated information»—, asi que no se pueden pedir los
+ * dos. Y su propia documentacion avisa de lo que rompia el cotejo: «the center
+ * point is not guaranteed to lie inside the polygon».
+ *
+ * Para un nodo, `bb` devuelve sus coordenadas como siempre. Para un way o una
+ * relation llega la caja, y el punto de dibujo se saca de ella: el mismo que
+ * antes, calculado aqui en vez de alla.
+ */
+export function normalizar(e: ElementoOverpass): Punto | null {
+  const caja: Caja | null = e.bounds
+    ? [e.bounds.minlon, e.bounds.minlat, e.bounds.maxlon, e.bounds.maxlat]
+    : null
+  const lat = e.lat ?? e.center?.lat ?? (caja ? (caja[1] + caja[3]) / 2 : undefined)
+  const lon = e.lon ?? e.center?.lon ?? (caja ? (caja[0] + caja[2]) / 2 : undefined)
   if (lat === undefined || lon === undefined) return null
 
   const crudo = e.tags ?? {}
@@ -122,6 +152,7 @@ function normalizar(e: ElementoOverpass): Punto | null {
     osmId: e.id,
     lat,
     lon,
+    caja,
     nombre: crudo.name ?? null,
     categoria,
     clase: claseDe(crudo),

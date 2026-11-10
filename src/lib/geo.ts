@@ -12,6 +12,27 @@ export function distanciaM(aLon: number, aLat: number, bLon: number, bLat: numbe
 export type Anillo = number[][]
 export type Caja = [number, number, number, number]
 
+/**
+ * Distancia en metros de un punto a una caja: 0 si cae dentro.
+ *
+ * Es lo que arregla el sesgo del cotejo contra objetos grandes. Un parque o un
+ * campus son poligonos en OSM, y hasta ahora se comparaban contra su `center`,
+ * que ni siquiera es el centroide: es el centro de su caja envolvente. En la
+ * ESPOCH eso cae a cientos de metros del punto municipal, que esta sobre un
+ * edificio concreto, asi que el cotejo la daba por ausente teniendola delante.
+ *
+ * Midiendo contra la caja, un punto que esta dentro de la huella da 0 y el
+ * objeto se encuentra. Se pega el punto al borde de la caja y se mide desde
+ * ahi; en los dos ejes a la vez eso da la distancia a la esquina, que es la
+ * correcta.
+ */
+export function distanciaACaja(lon: number, lat: number, caja: Caja): number {
+  const [oeste, sur, este, norte] = caja
+  const x = Math.min(Math.max(lon, oeste), este)
+  const y = Math.min(Math.max(lat, sur), norte)
+  return distanciaM(lon, lat, x, y)
+}
+
 export function cajaDe(anillos: Anillo[]): Caja {
   let oeste = Infinity, sur = Infinity, este = -Infinity, norte = -Infinity
   for (const anillo of anillos) {

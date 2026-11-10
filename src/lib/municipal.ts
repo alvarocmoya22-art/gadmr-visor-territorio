@@ -6,7 +6,7 @@
  * `scripts/convertir_shapefiles.py`. Ese script es la única vía de actualización:
  * si llegan shapefiles nuevos, se vuelve a correr, no se editan los GeoJSON.
  */
-import { cajaDe, distanciaM, enCaja, enPoligono, normalizar, poligonosDe, puntoInterior, similitud, type Anillo, type Caja } from './geo'
+import { cajaDe, distanciaACaja, distanciaM, enCaja, enPoligono, normalizar, poligonosDe, puntoInterior, similitud, type Anillo, type Caja } from './geo'
 import type { Punto } from './overpass'
 
 export interface Plataforma {
@@ -345,6 +345,24 @@ export const barrioDe = (lon: number, lat: number, barrios: Barrio[]) =>
  * «confirmado» exige cercanía y nombre parecido. Solo la cercanía no basta: en
  * el centro de Riobamba casi cualquier punto tiene algún vecino a 50 m, así que
  * ese criterio por sí solo daría por registrado lo que no lo está.
+ *
+ * SE MIDE CONTRA LA HUELLA, NO CONTRA SU CENTRO. Era el sesgo conocido del
+ * método: un parque o un campus son polígonos en OSM, y se comparaban contra
+ * el punto que Overpass devuelve por ellos, que ni siquiera es el centroide
+ * —es el centro de su caja envolvente—. El punto municipal está sobre un
+ * edificio concreto, así que en la ESPOCH la diferencia pasaba de los 50 m del
+ * radio y el cotejo la daba por ausente teniéndola delante.
+ *
+ * Ahora, si el objeto trae caja, la distancia se mide a la caja y vale 0
+ * cuando el punto municipal cae dentro de la huella.
+ *
+ * QUÉ QUEDA MAL TODAVÍA, porque la caja no es el polígono: una manzana en
+ * forma de L tiene una caja que abarca el hueco, así que un punto en ese hueco
+ * se acerca más de lo que debería. Para `dudoso` da igual —solo dice «hay algo
+ * cerca»— y para `confirmado` no basta con la cercanía: hace falta además que
+ * el nombre se parezca. Corregirlo del todo pide pedirle a Overpass la
+ * geometría entera, que son cientos de vértices por objeto en vez de cuatro
+ * números.
  */
 export function cotejar(eq: { nombre: string; lon: number; lat: number }, osm: Punto[]): Cotejo {
   const nombreEq = normalizar(eq.nombre)
@@ -353,7 +371,9 @@ export function cotejar(eq: { nombre: string; lon: number; lat: number }, osm: P
   let mejorPorNombre: { p: Punto; d: number } | null = null
 
   for (const p of osm) {
-    const d = distanciaM(eq.lon, eq.lat, p.lon, p.lat)
+    const d = p.caja
+      ? distanciaACaja(eq.lon, eq.lat, p.caja)
+      : distanciaM(eq.lon, eq.lat, p.lon, p.lat)
     if (d > RADIO_COTEJO_M) continue
     if (!mejor || d < mejor.d) mejor = { p, d }
     if (nombreEq && p.nombre) {
