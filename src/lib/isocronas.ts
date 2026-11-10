@@ -12,16 +12,53 @@
  *
  * Lo que NO tiene en cuenta, y conviene saber:
  *
- *  - **La pendiente.** Riobamba está a 2.750 m y tiene cuestas; subir cuesta
- *    más que bajar y el grafo no lo sabe. Las isócronas cuesta arriba son
- *    optimistas.
+ *  - **La altitud.** Riobamba está a 2.750 m y ahí se rinde menos que al
+ *    nivel del mar. La cuesta sí se cobra ahora —con la función de Tobler
+ *    sobre el relieve—, pero la altura no: siguen siendo algo optimistas, y
+ *    menos que antes.
  *  - **Los semáforos y los cruces.** No hay penalización por esperar.
  *  - **El estado de la acera.** Una calle sin vereda cuenta igual que un
  *    bulevar.
  */
 
-/** Velocidad de caminata, en metros por minuto (4,5 km/h). */
+/** Velocidad de caminata en llano, en metros por minuto (4,5 km/h). */
 export const VELOCIDAD_M_MIN = 75
+
+/**
+ * Por encima de esto no hay calle: hay un error de muestreo del relieve.
+ *
+ * La vía urbana más empinada del mundo ronda el 35 %. El modelo de elevación
+ * tiene un píxel de 30 m y es de superficie —incluye tejados—, así que en las
+ * aristas cortas el desnivel sale disparado: el 3,2 % de las de menos de 15 m
+ * pasaban del 30 %, frente al 0,0 % de las de más de 120 m. No es el terreno.
+ */
+const TOPE_PENDIENTE = 0.3
+
+/**
+ * Cuánto se tarda en recorrer una arista, con su cuesta.
+ *
+ * Es la función de marcha de Tobler, reescalada para que en llano dé los
+ * 4,5 km/h que el visor venía usando: así las isócronas de una ciudad plana
+ * salen igual que antes y lo que cambia es solo la cuesta.
+ *
+ *     v = v₀ · exp(−3,5 · (|s + 0,05| − 0,05))
+ *
+ * El 0,05 de dentro no es un ajuste: es la forma de la curva. Lo más rápido
+ * que se anda no es en llano sino en una bajada suave del 5 %, y a partir de
+ * ahí bajar vuelve a costar, porque frenar cansa. Por eso una bajada del 20 %
+ * se anda a la misma velocidad que una subida del 10 %.
+ *
+ * SIN COTA, SE CAMINA EN LLANO. Es lo único honesto cuando no se sabe: el DEM
+ * está recortado al cantón y la red de OSM se sale por el norte. De los 2.522
+ * nodos sin dato, uno solo cae dentro del límite urbano.
+ */
+export function minutosDeArista(metros: number, desnivel: number | null): number {
+  if (metros <= 0) return 0
+  if (desnivel === null || !Number.isFinite(desnivel)) return metros / VELOCIDAD_M_MIN
+  const s = Math.max(-TOPE_PENDIENTE, Math.min(TOPE_PENDIENTE, desnivel / metros))
+  const v = VELOCIDAD_M_MIN * Math.exp(-3.5 * (Math.abs(s + 0.05) - 0.05))
+  return metros / v
+}
 
 /** Tramos que ofrece el control, en minutos. */
 export const MINUTOS = [5, 10, 15]
@@ -30,6 +67,8 @@ export const MINUTOS = [5, 10, 15]
 type Arista = [number, number, number, number[][]]
 
 export interface Red {
+  /** Altitud de cada nodo en metros, o null donde el relieve no llega. */
+  z?: (number | null)[]
   fuente: string
   nodos: [number, number][]
   aristas: Arista[]
@@ -191,7 +230,11 @@ export function calcularIsocrona(red: Red, origenes: Origen[], minutosMax: numbe
     if (t > minutos[u]) continue
     if (t >= minutosMax) continue
     for (const [v, ia] of red.vecinos[u]) {
-      const nuevo = t + red.aristas[ia][2] / VELOCIDAD_M_MIN
+      const za = red.z?.[u]
+      const zb = red.z?.[v]
+      const desnivel =
+        za === undefined || zb === undefined || za === null || zb === null ? null : zb - za
+      const nuevo = t + minutosDeArista(red.aristas[ia][2], desnivel)
       if (nuevo < minutos[v] && nuevo <= minutosMax) {
         minutos[v] = nuevo
         cola.push([nuevo, v])

@@ -23,7 +23,7 @@
 import { contours } from 'd3-contour'
 import { ALCANCE_FUERA_DE_CALLE_M } from '../config/deckEscenarios'
 import { enPoligono, type Anillo, type Caja } from './geo'
-import { MINUTOS, VELOCIDAD_M_MIN, type Isocrona, type Red } from './isocronas'
+import { MINUTOS, VELOCIDAD_M_MIN, minutosDeArista, type Isocrona, type Red } from './isocronas'
 
 /**
  * Lado de la celda del campo de tiempos, en metros.
@@ -147,6 +147,10 @@ export function campoDeTiempos(red: Red, iso: Isocrona, minutosMax: number): Cam
     const [a, b, , trazado] = red.aristas[arista]
     const tA = iso.minutos[a]
     const tB = iso.minutos[b]
+    const za = red.z?.[a]
+    const zb = red.z?.[b]
+    const dz =
+      za === undefined || zb === undefined || za === null || zb === null ? null : zb - za
     if (!Number.isFinite(tA) || !Number.isFinite(tB)) continue
 
     // Largo medido sobre el trazado, no el declarado: el tiempo se reparte
@@ -175,7 +179,20 @@ export function campoDeTiempos(red: Red, iso: Isocrona, minutosMax: number): Cam
         const x = trazado[k][0] + (trazado[k + 1][0] - trazado[k][0]) * f
         const y = trazado[k][1] + (trazado[k + 1][1] - trazado[k][1]) * f
         const d = recorrido + l * f
-        const t = Math.min(tA + d / VELOCIDAD_M_MIN, tB + (largo - d) / VELOCIDAD_M_MIN)
+        /*
+         * El tiempo hasta este punto, por el camino más corto de los dos
+         * extremos, con la cuesta que toque.
+         *
+         * El desnivel se reparte proporcional al recorrido: no se sabe cómo
+         * sube la calle por dentro, solo cuánto sube en total, y repartirlo
+         * por igual es el único supuesto que no inventa un perfil. Viniendo
+         * de A se sube `dz·d/largo`; viniendo de B se baja el resto, y por eso
+         * los dos sentidos no dan el mismo número.
+         */
+        const t = Math.min(
+          tA + minutosDeArista(d, dz === null ? null : (dz * d) / largo),
+          tB + minutosDeArista(largo - d, dz === null ? null : (-dz * (largo - d)) / largo),
+        )
         if (t <= minutosMax) mojar(x, y, t)
       }
       recorrido += l

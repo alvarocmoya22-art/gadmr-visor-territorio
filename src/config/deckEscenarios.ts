@@ -74,7 +74,8 @@ export const ESCENARIOS: Escenario[] = [
     rotulo: 'Isócronas a pie',
     resumen: 'La mancha del territorio al que se llega andando en 5, 10 o 15 minutos.',
     origen:
-      'Red de calles de OpenStreetMap, a 4,5 km/h, y población del Censo 2022. Es distancia por calle, no en línea recta.',
+      'Red de calles de OpenStreetMap y población del Censo 2022. Es distancia por calle, no en línea recta, y cobra la cuesta: 4,5 km/h en llano, menos al subir. '
+      + 'No tiene en cuenta la altitud.',
     bloqueado: null,
   },
   {

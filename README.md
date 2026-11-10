@@ -561,9 +561,53 @@ contorno es una simplificación del campo y el campo es el dato. Los habitantes
 salen del Censo 2022 repartido por edificios, con la misma rejilla de muestreo
 que la cobertura por radio, para que las dos cifras del visor sean comparables.
 
-**Lo que no tiene en cuenta**, y hay que decirlo cada vez que se enseñe: la
-pendiente —Riobamba está a 2.750 m y sube, así que cuesta arriba el alcance real
-es menor—, las esperas en los cruces y si hay vereda o no. Se camina a 4,5 km/h.
+### La cuesta se cobra
+
+Se camina a **4,5 km/h en llano**, y a partir de ahí manda la pendiente. Es la
+función de marcha de Tobler, reescalada para que en llano dé exactamente los
+4,5 km/h de antes: lo único que cambia respecto al visor anterior es la cuesta.
+
+| pendiente | velocidad | respecto al llano |
+|---|---|---|
+| −20 % | 52,9 m/min | 70 % |
+| −5 % | **89,3 m/min** | **119 %** |
+| llano | 75,0 m/min | 100 % |
+| +10 % | 52,9 m/min | 70 % |
+| +20 % | 37,2 m/min | 50 % |
+
+Lo más rápido que se anda no es en llano sino en una **bajada suave del 5 %**, y
+a partir de ahí bajar vuelve a costar porque frenar cansa: una bajada del 20 %
+se anda a la misma velocidad que una subida del 10 %. Eso no es un ajuste, es la
+forma de la curva de Tobler.
+
+**Medido sobre 40 puntos al azar de la red, a 10 minutos:** 27 pierden alcance,
+10 ganan y 3 quedan igual. El peor caso pierde el **10,6 %** y el mejor gana el
+**15,0 %**; la mediana es −2,0 %. Es justo lo que este README venía advirtiendo:
+las isócronas eran optimistas cuesta arriba.
+
+La cota de cada nodo la pone `scripts/altitud_red.py` desde el Copernicus DEM
+GLO-30, y añade 82 KB a `red.json`. Se guarda la **altitud del nodo** y no la
+pendiente de la arista, porque la pendiente tiene signo: la misma calle es
+subida en un sentido y bajada en el otro, y así el sentido lo decide quien
+recorre el grafo.
+
+**El modelo es de superficie y eso se nota.** Incluye tejados y vegetación, y su
+píxel mide 30 m: en una ciudad, dos nodos de la misma calle pueden caer uno en
+el asfalto y otro en un tejado. Medido aquí, el **3,2 % de las aristas de menos
+de 15 m** salía con más del 30 % de pendiente, frente al **0,0 % de las de más
+de 120 m**. No es el terreno, es el píxel. Contra eso van dos correcciones: una
+**mediana de 3×3** antes de muestrear —que ignora un tejado aislado y no mueve
+el terreno, y baja el percentil 90 del 8,0 % al 7,3 %— y un **tope del 30 %**,
+porque la calle más empinada del mundo ronda el 35 %. Lo topa en 48 aristas de
+17.636.
+
+**Sin cota se camina en llano.** El DEM está recortado al cantón y la red de OSM
+se sale por el norte: 2.522 nodos no tienen altitud y **solo uno de ellos cae
+dentro del límite urbano**, que es donde las isócronas de verdad corren.
+
+**Lo que sigue sin tenerse en cuenta**, y hay que decirlo cada vez que se
+enseñe: la **altitud** —a 2.750 m se rinde menos que al nivel del mar, y eso
+Tobler no lo modela—, las esperas en los cruces y si hay vereda o no.
 
 Regenerar la red cuando cambien las calles de OSM:
 
