@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import maplibregl, { type ExpressionSpecification, type StyleSpecification } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
+import { Protocol } from 'pmtiles'
 import { VISTA_INICIAL } from '../config/riobamba'
 import { capaDe, capaRotulosDe, MAPAS_BASE, MAPA_BASE_INICIAL } from '../config/mapasBase'
 import { ICONOS_PROYECTO, imagenDeIcono, nombreIcono } from '../config/iconosProyecto'
@@ -123,6 +124,9 @@ interface Props {
   /** Calle buscada: el mapa la encuadra y la marca. */
   calleElegida: Calle | null
 }
+
+/** El protocolo se registra una vez por carga, no por mapa. */
+let protocoloPuesto = false
 
 const VACIO: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] }
 
@@ -525,6 +529,21 @@ export default function Mapa({
 
   useEffect(() => {
     if (!contenedor.current || mapa.current) return
+
+    /*
+     * El protocolo `pmtiles://`, registrado una sola vez para toda la
+     * aplicacion.
+     *
+     * Un PMTiles es un archivo suelto de teselas que se lee por rangos HTTP:
+     * sirve desde GitHub Pages sin servidor ni base de datos, y el navegador
+     * pide solo las teselas que caben en pantalla. Es lo que hace viable
+     * publicar las 166.530 edificaciones del canton: en GeoJSON serian 56 MB
+     * que hay que bajar enteros antes de dibujar nada.
+     */
+    if (!protocoloPuesto) {
+      maplibregl.addProtocol('pmtiles', new Protocol().tile)
+      protocoloPuesto = true
+    }
 
     const m = new maplibregl.Map({
       container: contenedor.current,
@@ -946,33 +965,39 @@ export default function Mapa({
        * pisos por tres metros. El 83 % del area urbana la trae, que es lo que
        * hace que esto se parezca a Riobamba y no a un bloque plano repetido.
        */
-      m.addSource('edificios', { type: 'geojson', data: VACIO })
+      m.addSource('edificios', {
+        type: 'vector',
+        url: `pmtiles://${import.meta.env.BASE_URL}datos/edificaciones_2023.pmtiles`,
+        attribution:
+          '<a href="https://sites.research.google/gr/open-buildings/">Google Open Buildings</a> 2023 · CC BY 4.0',
+      })
       m.addLayer({
         id: 'edificios-3d',
         type: 'fill-extrusion',
         source: 'edificios',
+        'source-layer': 'edificaciones',
         layout: { visibility: 'none' },
         paint: {
           /*
-           * Mas alto, mas claro. Lo que no tiene dato va raso y en un tono
-           * aparte, para que se vea que es huella sin volumen y no un edificio
-           * de una planta: son dos cosas distintas y el mapa no debe
-           * confundirlas.
+           * Mas alto, mas claro. Y lo que el modelo marca como dudoso va en un
+           * tono aparte: son edificaciones pequeñas o de deteccion incierta,
+           * con la altura aproximada, y no deben leerse igual que las medidas
+           * con confianza.
            */
           'fill-extrusion-color': [
             'case',
-            ['!', ['get', 'medido']],
+            ['==', ['get', 'confiab'], 'baja'],
             tinta3,
             [
               'interpolate',
               ['linear'],
-              ['get', 'altura'],
+              ['get', 'alt_med_m'],
               3, raiz.getPropertyValue('--gr-s1').trim() || '#5b7d95',
               12, raiz.getPropertyValue('--gr-s2').trim() || '#7fa8c4',
               30, raiz.getPropertyValue('--gr-s3').trim() || '#b3cfe7',
             ],
           ],
-          'fill-extrusion-height': ['get', 'altura'],
+          'fill-extrusion-height': ['get', 'alt_med_m'],
           'fill-extrusion-base': 0,
           'fill-extrusion-opacity': 0.85,
         },
@@ -1250,26 +1275,33 @@ export default function Mapa({
        * La edificacion tambien se explica al pasar por encima.
        *
        * Un volumen sin cifra no dice de donde sale su altura, y esa es
-       * justamente la pregunta: con doce mil edificios dibujados, lo que
-       * importa saber de cada uno es si su altura esta medida o es el relleno
-       * de tres metros que se pone cuando OpenStreetMap no trae el dato.
+       * justamente la pregunta: con ciento sesenta mil edificaciones
+       * dibujadas, lo que importa saber de cada una es cuanto mide y cuanto de
+       * eso es estimacion. Ninguna de estas alturas esta medida en campo: son
+       * de un modelo con un error tipico de metro y medio, asi que la ficha
+       * dice «unos» y nunca un decimal.
        */
       m.on('mousemove', 'edificios-3d', (e) => {
         const f = e.features?.[0]
         if (!f) return
         m.getCanvas().style.cursor = 'pointer'
-        const altura = Number(f.properties?.altura ?? 0)
-        const medido = f.properties?.medido === true || f.properties?.medido === 'true'
-        const clase = String(f.properties?.clase ?? 'yes')
-        const pisos = Math.round(altura / 3)
+        const altura = Number(f.properties?.alt_med_m ?? 0)
+        const pisos = Number(f.properties?.pisos_est ?? 0)
+        const dudosa = String(f.properties?.confiab ?? '') === 'baja'
+        const area = Number(f.properties?.area_m2 ?? 0)
+        /*
+         * La altura se redondea al metro y se dice «unos», porque el modelo
+         * declara un error tipico de metro y medio: escribir «7,3 m» seria
+         * fingir una precision que el dato no tiene.
+         */
         globo
           .setLngLat(e.lngLat)
           .setHTML(
-            `<b>${altura} m de alto</b><br>` +
-              (medido
-                ? `altura declarada en OpenStreetMap · unos ${pisos} piso${pisos === 1 ? '' : 's'}`
-                : 'sin altura en OpenStreetMap · dibujado al mínimo') +
-              (clase && clase !== 'yes' ? `<br>building=${clase}` : ''),
+            `<b>unos ${Math.round(altura)} m de alto</b><br>` +
+              `${pisos} piso${pisos === 1 ? '' : 's'} estimados · ${area} m² en planta<br>` +
+              (dudosa
+                ? 'detección dudosa · altura aproximada'
+                : 'altura estimada por modelo · ±2 m'),
           )
           .addTo(m)
       })
@@ -1718,82 +1750,19 @@ export default function Mapa({
    * esta capa aporta.
    */
   /*
-   * La edificacion se descarga la primera vez que alguien la enciende, no al
-   * abrir el visor: es megabyte y medio que no tiene por que pagar quien no la
-   * va a mirar.
+   * La edificacion ya no se pide: viaja en teselas.
    *
-   * Descargar y poner van en dos efectos distintos a proposito. El mapa puede
-   * no tener el estilo listo cuando la descarga termina —en una pestana de
-   * fondo el navegador no pinta, y sin pintar MapLibre no acaba de cargar—, y
-   * si se intentara poner los datos ahi mismo se perderian sin ruido: la capa
-   * quedaria encendida y vacia, que es justo lo que parece un fallo de datos
-   * sin serlo.
+   * Antes la capa arrancaba vacia, dibujaba una foto de `edificios.geojson` y
+   * pedia por detras la version viva a Overpass, porque el levantamiento en
+   * campo anade edificacion todas las semanas. Ahora la fuente es un PMTiles
+   * de 14 MB que el navegador lee por rangos: no hay nada que descargar
+   * primero ni nada que sustituir despues.
+   *
+   * SE PIERDE EL REFRESCO. Lo de OSM se actualizaba solo y esto es una foto de
+   * 2023 que no cambia. A cambio, deja de ser una capa de las 18 plataformas y
+   * pasa a cubrir el canton entero: 166.530 edificaciones en vez de 6.039.
    */
-  const edificiosGeo = useRef<GeoJSON.FeatureCollection | null>(null)
-  const [edificiosListos, setEdificiosListos] = useState(false)
 
-  useEffect(() => {
-    if (!capas.edificios || edificiosGeo.current) return
-    let vivo = true
-    void (async () => {
-      try {
-        const resp = await fetch(`${import.meta.env.BASE_URL}datos/edificios.geojson`, {
-          cache: 'force-cache',
-        })
-        if (!resp.ok || !vivo) return
-        edificiosGeo.current = (await resp.json()) as GeoJSON.FeatureCollection
-        if (vivo) setEdificiosListos(true)
-      } catch {
-        // Sin edificacion el visor sigue entero; no hay nada que avisar.
-      }
-    })()
-    return () => {
-      vivo = false
-    }
-  }, [capas.edificios])
-
-  useEffect(() => {
-    if (!edificiosListos || !edificiosGeo.current) return
-    cuandoListo((m) => {
-      const fuente = m.getSource('edificios') as maplibregl.GeoJSONSource | undefined
-      if (fuente && edificiosGeo.current) fuente.setData(edificiosGeo.current)
-    })
-  }, [edificiosListos, mapaListo])
-
-  /*
-   * Y en cuanto esta dibujada la foto del repositorio, se pide la viva.
-   *
-   * El archivo es del dia en que se corrio el script y el levantamiento en
-   * campo anade edificacion todas las semanas; entre una cosa y otra ya hay
-   * dos mil edificios de diferencia. Va por detras a proposito: son cinco
-   * megas y unos segundos, y hacer esperar a quien enciende la capa para
-   * enseñarle casi lo mismo seria un mal cambio.
-   *
-   * Si ningun espejo responde no hay nada que anunciar: la capa ya esta
-   * dibujada con la foto, que sigue siendo buena.
-   */
-  const edificiosFrescos = useRef(false)
-  useEffect(() => {
-    if (!capas.edificios || !mapaListo || edificiosFrescos.current) return
-    const piezas = (capasMunicipales?.plataformas ?? []).flatMap((p) => p.poligonos)
-    if (piezas.length === 0) return
-    let vivo = true
-    void (async () => {
-      const { edificacionViva } = await import('../lib/edificiosOsm')
-      const fresca = await edificacionViva(piezas)
-      if (!vivo || !fresca) return
-      // La marca se pone solo si llego algo: si Overpass no respondio, apagar y
-      // encender la capa vuelve a intentarlo, que es lo que uno espera.
-      edificiosFrescos.current = true
-      cuandoListo((m) => {
-        const fuente = m.getSource('edificios') as maplibregl.GeoJSONSource | undefined
-        fuente?.setData(fresca.geo)
-      })
-    })()
-    return () => {
-      vivo = false
-    }
-  }, [capas.edificios, capasMunicipales, mapaListo])
 
   /*
    * La red vial del GADPCH son seiscientos kilobytes y se descarga la primera

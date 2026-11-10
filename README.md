@@ -276,42 +276,51 @@ alto.
 Se enciende en **Capas del mapa → Edificación en 3D**, e inclina la cámara al
 hacerlo: un modelo en tres dimensiones visto en planta es un mapa de manchas.
 
-Son **6.039 edificios** de OpenStreetMap dentro de las 18 plataformas, que
-extrae `scripts/edificios_osm.py`. La altura sale de `height` cuando está y si
-no de los pisos por tres metros. Lo que decidió que valiera la pena es la
-proporción: **el 83 % trae altura o pisos declarados**, así que el volumen se
-parece a Riobamba y no es un bloque plano de seis metros repetido. Lo que no
-tiene dato va raso y en otro tono, para que se vea que es huella sin volumen y
-no un edificio de una planta.
+Son **166.530 edificaciones de todo el cantón**, de Google Open Buildings v3
+(huellas, imágenes 2023) cruzado con Open Buildings 2.5D Temporal (alturas).
+Las prepara `scripts/edificaciones_altura.py` a partir de la carpeta de datos
+libres de Riobamba.
 
-Pesa 1,5 MB y **se descarga la primera vez que alguien enciende la capa**, no al
-abrir el visor, igual que la red peatonal.
+**No son cartografía oficial y no hay una sola altura medida en campo.** El
+propio origen lo declara: las alturas son estimaciones de un modelo sobre
+imágenes, con un **error típico de 1,5 a 2 m**, y sirven «para análisis por
+zonas y para priorizar inspecciones, no para certificar el número de pisos de
+un predio». Por eso la ficha dice «unos 7 m» y nunca un decimal, y lo que el
+modelo marca como detección dudosa —43.692 edificaciones, de confianza baja—
+va en otro tono. Licencia CC BY 4.0, atribuida en el propio mapa.
 
-**Al encender la capa se pide la versión viva de OpenStreetMap.** El archivo es
-la foto del día en que se corrió el script, y el levantamiento en campo añade
-edificación todas las semanas: entre una cosa y otra ya hay **mil cien edificios
-de diferencia** —6.039 en el archivo, 7.150 en OSM hoy—.
+Las **21.660 sin altura** no se publican. Traen altura 0 y presencia 0 porque
+el modelo 2.5D no detectó nada, no porque el edificio sea raso: extruirlas a
+cero las dibujaría como suelo y ponerles tres metros sería inventar.
 
-La foto se dibuja primero y la consulta va por detrás: son cinco megas y unos
-segundos, y hacer esperar a quien enciende la capa para enseñarle casi lo mismo
-sería un mal cambio. Cuando llega lo nuevo, se sustituye sin que nadie pida
-nada. Se guarda en memoria mientras dure la sesión y no en `localStorage`,
-porque dos megas competirían con la caché de los registros por una cuota que no
-da para los dos: apagar y encender la capa no vuelve a descargar, recargar la
-página sí.
+### Por qué teselas y no un GeoJSON
 
-Si ningún espejo responde no se anuncia nada: la capa ya está dibujada con la
-foto, que sigue siendo buena. Se prueban los dos espejos **dos veces, con una
-pausa en medio**, porque un 504 de Overpass es corriente y pasajero —el servidor
-estaba ocupado, no roto— y rendirse al primero dejaba la capa con el archivo
-viejo por nada.
+En GeoJSON esas 166.530 edificaciones pesan **56 MB que el navegador baja
+enteros antes de dibujar nada**, y simplificar no ayuda —el peso son los
+objetos, no los vértices—. En **PMTiles son 14 MB en un solo archivo**, que se
+sirve como estático desde GitHub Pages sin servidor ni base de datos y se lee
+por rangos HTTP: el navegador pide solo las teselas que caben en pantalla, unos
+cientos de kilobytes al abrir.
 
-**Al pasar por encima, cada edificio dice de dónde sale su altura.** Un volumen
-sin cifra no explica nada, y con siete mil dibujados la pregunta de cada uno es
-si su altura está medida o es el relleno de tres metros que se pone cuando
-OpenStreetMap no trae el dato. La ventana flotante lo distingue: «9 m de alto ·
-altura declarada en OpenStreetMap · unos 3 pisos» frente a «sin altura en
-OpenStreetMap · dibujado al mínimo».
+El protocolo `pmtiles://` se registra una vez por carga, en `Mapa.tsx`.
+
+### Lo que se perdió al cambiar
+
+La capa anterior eran **6.039 edificios de OpenStreetMap** dentro de las 18
+plataformas, y **se refrescaba sola**: al encenderla pedía la versión viva a
+Overpass, así que el levantamiento con Every Door se veía al día siguiente. Eso
+ya no ocurre: esto es una foto de 2023 que no cambia.
+
+A cambio, deja de ser una capa del casco y pasa a cubrir el cantón entero —de
+6.039 a 166.530—, y el área rural deja de aparecer vacía.
+
+`public/datos/edificios.geojson` se sigue publicando aunque el visor ya no lo
+use: CHASKI lo lista en su catálogo de capas del municipio y LLACTA lo cuenta
+en su inventario de fuentes.
+
+**Al pasar por encima, cada edificación dice lo que es.** «Unos 7 m de alto ·
+2 pisos estimados · 84 m² en planta · altura estimada por modelo ±2 m», y en
+las de confianza baja, «detección dudosa · altura aproximada».
 
 **Va por encima de las manchas del análisis y por debajo de los puntos.** Estaba
 declarada debajo de todo, y con un análisis abierto las coropletas —que son
