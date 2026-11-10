@@ -69,6 +69,8 @@ export interface CapasVisibles {
   parroquias: boolean
   /** El reparto oficial del canton entre suelo urbano y suelo rural. */
   suelo: boolean
+  /** Que hay encima del suelo: bosque, cultivo, construido. ESA WorldCover. */
+  cobertura: boolean
   /** La red vial oficial del canton, la del GADPCH. */
   redVial: boolean
   barrios: boolean
@@ -127,6 +129,16 @@ interface Props {
 
 /** El protocolo se registra una vez por carga, no por mapa. */
 let protocoloPuesto = false
+
+/**
+ * Un píxel transparente, para que la capa de imagen exista sin descargar nada.
+ *
+ * Generado, no escrito de memoria: el primero que puse estaba corrupto y
+ * MapLibre fallaba con «the source image could not be decoded» nada más
+ * cargar, antes de que nadie encendiera la capa.
+ */
+const PIXEL_VACIO =
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYGBgAAAABQABpfZFQAAAAABJRU5ErkJggg=='
 
 const VACIO: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] }
 
@@ -687,6 +699,46 @@ export default function Mapa({
        * la lista taparia las coropletas de analisis, que son justamente lo
        * que hay que leer encima del territorio.
        */
+      /*
+       * La cobertura del suelo: una IMAGEN, no un GeoJSON.
+       *
+       * Se llama `coberturaSuelo` y no `cobertura` porque ese nombre ya estaba
+       * cogido: es la fuente de la cobertura por radio de servicio del
+       * análisis. Dos cosas distintas que en castellano se llaman igual.
+       *
+       * Es una superficie continua de 10 m que cubre el cantón entero y se
+       * mira entera, así que no hay nada que trocear: cuatro esquinas y
+       * MapLibre la coloca. Viene ya reproyectada a Mercator por
+       * `scripts/cobertura_suelo.py`, porque una imagen en UTM colocada por
+       * sus esquinas se deforma por dentro y la mancha construida acabaría
+       * desplazada respecto a las calles.
+       *
+       * Arranca con un píxel transparente y sin pedir el megabyte: la ficha
+       * con las esquinas de verdad llega al encender la capa.
+       */
+      m.addSource('coberturaSuelo', {
+        type: 'image',
+        url: PIXEL_VACIO,
+        coordinates: [
+          [-78.9, -1.4],
+          [-78.4, -1.4],
+          [-78.4, -1.9],
+          [-78.9, -1.9],
+        ],
+      })
+      m.addLayer(
+        {
+          id: 'cobertura-suelo-imagen',
+          type: 'raster',
+          source: 'coberturaSuelo',
+          layout: { visibility: 'none' },
+          // Translúcida: debajo está el lienzo con las calles, y la cobertura
+          // es contexto, no el dato principal.
+          paint: { 'raster-opacity': 0.55, 'raster-resampling': 'nearest' },
+        },
+        'deficit-relleno',
+      )
+
       m.addSource('suelo', { type: 'geojson', data: VACIO })
       m.addLayer(
         {
@@ -1815,6 +1867,56 @@ export default function Mapa({
 
 
   /*
+   * La cobertura del suelo se pide la primera vez que alguien la enciende.
+   *
+   * Es un megabyte de imagen y viene apagada: cargarla al abrir seria una
+   * descarga de mas para todo el mundo a cambio de nada. La ficha trae las
+   * cuatro esquinas que calculo el script, asi que la imagen se coloca sola
+   * sin que aqui haya una coordenada escrita a mano.
+   */
+  const coberturaPuesta = useRef(false)
+  useEffect(() => {
+    if (!capas.cobertura || !mapaListo || coberturaPuesta.current) return
+    let vivo = true
+    void (async () => {
+      try {
+        const resp = await fetch(`${import.meta.env.BASE_URL}datos/cobertura_2021.json`, {
+          cache: 'force-cache',
+        })
+        if (!resp.ok || !vivo) return
+        // Las cuatro esquinas, en el orden que pide MapLibre: arriba-izq,
+        // arriba-der, abajo-der, abajo-izq. Si el archivo trae otra cosa, la
+        // capa se queda apagada en vez de colocarse mal.
+        const ficha = (await resp.json()) as {
+          imagen: string
+          esquinas: [number, number][]
+        }
+        if (!Array.isArray(ficha.esquinas) || ficha.esquinas.length !== 4) return
+        const esquinas = ficha.esquinas as [
+          [number, number],
+          [number, number],
+          [number, number],
+          [number, number],
+        ]
+        coberturaPuesta.current = true
+        cuandoListo((m) => {
+          const fuente = m.getSource('coberturaSuelo') as maplibregl.ImageSource | undefined
+          if (!fuente) return
+          fuente.updateImage({
+            url: `${import.meta.env.BASE_URL}${ficha.imagen}`,
+            coordinates: esquinas,
+          })
+        })
+      } catch {
+        // Sin cobertura el visor sigue entero; no hay nada que avisar.
+      }
+    })()
+    return () => {
+      vivo = false
+    }
+  }, [capas.cobertura, mapaListo])
+
+  /*
    * La red vial del GADPCH son seiscientos kilobytes y se descarga la primera
    * vez que alguien la enciende, igual que el catastro y la edificacion.
    *
@@ -1915,6 +2017,7 @@ export default function Mapa({
       poner('plataformas-relleno', capas.plataformas)
       poner('plataformas-halo', capas.plataformas)
       poner('plataformas-linea', capas.plataformas)
+      poner('cobertura-suelo-imagen', capas.cobertura)
       poner('suelo-relleno', capas.suelo)
       poner('suelo-linea', capas.suelo)
       poner('parroquias-linea', capas.parroquias)

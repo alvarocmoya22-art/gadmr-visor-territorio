@@ -72,6 +72,7 @@ const CAPAS_INICIALES: CapasVisibles = {
   plataformas: true,
   parroquias: false,
   suelo: false,
+  cobertura: false,
   redVial: false,
   barrios: false,
   equipamientos: true,
@@ -1453,7 +1454,18 @@ export default function App() {
         <a href="https://www.mapillary.com" style={{ color: 'var(--gr-info)' }}>
           Mapillary
         </a>
-        , CC BY-SA 4.0 · plataformas, parroquias, barrios y equipamientos: GADM Riobamba, uso
+        , CC BY-SA 4.0 · cobertura del suelo:{' '}
+        <a href="https://esa-worldcover.org/" style={{ color: 'var(--gr-info)' }}>
+          ESA WorldCover
+        </a>{' '}
+        2021, CC BY 4.0 · edificacion 2023:{' '}
+        <a
+          href="https://sites.research.google/gr/open-buildings/"
+          style={{ color: 'var(--gr-info)' }}
+        >
+          Google Open Buildings
+        </a>
+        , CC BY 4.0 · plataformas, parroquias, barrios y equipamientos: GADM Riobamba, uso
         interno · levantamiento en campo con Every Door.
       </footer>
     </div>

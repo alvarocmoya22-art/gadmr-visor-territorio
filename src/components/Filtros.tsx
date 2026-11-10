@@ -36,6 +36,26 @@ interface Props {
  * es la que hay que ver primero—, y el «sin dato» va aparte, en gris, porque
  * no es una calidad peor sino una ausencia.
  */
+/**
+ * Las nueve clases de ESA WorldCover, en el orden de lo natural a lo
+ * construido, no por cuánto ocupan.
+ *
+ * Los colores son los oficiales del producto, los mismos del `.qml` que
+ * acompaña al ráster: una paleta propia aquí haría que el mapa del visor y el
+ * de QGIS se vieran distintos siendo el mismo dato.
+ */
+const COBERTURAS: { color: string; rotulo: string }[] = [
+  { color: '#006400', rotulo: 'Bosque' },
+  { color: '#ffbb22', rotulo: 'Arbustal' },
+  { color: '#ffff4c', rotulo: 'Herbazal y pastizal' },
+  { color: '#f096ff', rotulo: 'Cultivos' },
+  { color: '#0096a0', rotulo: 'Humedal' },
+  { color: '#0064c8', rotulo: 'Agua' },
+  { color: '#b4b4b4', rotulo: 'Suelo desnudo' },
+  { color: '#f0f0f0', rotulo: 'Nieve y hielo' },
+  { color: '#fa0000', rotulo: 'Área construida' },
+]
+
 const RODADURAS: { clave: string; rotulo: string }[] = [
   { clave: 'asfalto', rotulo: 'Asfalto' },
   { clave: 'adoquinado', rotulo: 'Adoquinado' },
@@ -50,6 +70,7 @@ const CAPAS: { clave: keyof CapasVisibles; rotulo: string }[] = [
   { clave: 'plataformas', rotulo: 'Plataformas' },
   { clave: 'parroquias', rotulo: 'Parroquias' },
   { clave: 'suelo', rotulo: 'Clasificación del suelo' },
+  { clave: 'cobertura', rotulo: 'Cobertura del suelo · ESA' },
   { clave: 'redVial', rotulo: 'Red vial del cantón · GADPCH' },
   { clave: 'barrios', rotulo: 'Barrios' },
   { clave: 'equipamientos', rotulo: 'Equipamientos del GADM' },
@@ -265,6 +286,20 @@ export default function Filtros({
                     sin la capa en el mapa no explica nada. */}
                 {/* Dos clases, dos tonos: sin leyenda, una mancha terracota y
                     otra oliva no dicen cuál es cuál. */}
+                {c.clave === 'cobertura' && capas.cobertura && (
+                  <ul className="mb-1 ml-5 mt-1 space-y-0.5">
+                    {COBERTURAS.map((s) => (
+                      <li key={s.rotulo} className="flex items-center gap-2 text-[12px]">
+                        <span
+                          aria-hidden
+                          className="h-2.5 w-4 shrink-0 rounded-sm"
+                          style={{ background: s.color, opacity: 0.75 }}
+                        />
+                        <span style={{ color: 'var(--gr-tinta-3)' }}>{s.rotulo}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
                 {c.clave === 'suelo' && capas.suelo && (
                   <ul className="mb-1 ml-5 mt-1 space-y-0.5">
                     {[
