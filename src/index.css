@@ -499,6 +499,28 @@ body {
   box-shadow: 0 6px 20px rgb(15 25 34 / 18%);
 }
 .maplibregl-popup-tip { border-top-color: var(--gr-superficie); }
+
+/* La ficha de un proyecto. A diferencia del globo que sigue al cursor, esta
+   se abre al pulsar y se queda: necesita sitio para leerse y un aspa que se
+   vea, que por defecto queda casi encima del texto. */
+.gr-ficha-proyecto .maplibregl-popup-content { padding: 0.8rem 0.9rem 0.85rem; }
+.gr-ficha-proyecto .maplibregl-popup-close-button {
+  font-size: 17px;
+  padding: 0 6px;
+  color: var(--gr-tinta-3);
+  background: transparent;
+  border-radius: 4px;
+}
+.gr-ficha-proyecto .maplibregl-popup-close-button:hover {
+  color: var(--gr-tinta);
+  background: color-mix(in srgb, var(--gr-tinta) 10%, transparent);
+}
+/* El filete que separa el veredicto sigue a la tinta, no al borde del globo:
+   con `currentColor` a secas saldria del color del texto y seria una raya
+   negra de lado a lado. */
+.gr-ficha-proyecto .maplibregl-popup-content [style*="border-top"] {
+  border-top-color: var(--gr-linea) !important;
+}
 .maplibregl-ctrl-attrib {
   font-size: 10px;
   background: color-mix(in srgb, var(--gr-superficie) 88%, transparent) !important;

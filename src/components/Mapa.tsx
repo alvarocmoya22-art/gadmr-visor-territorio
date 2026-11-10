@@ -1426,6 +1426,90 @@ export default function Mapa({
         if (f) cb.current.onElegirBarrio(String(f.properties?.nombre ?? ''))
       })
 
+      /*
+       * La ficha de un proyecto, al pulsarlo.
+       *
+       * Los puntos del plan se veian en el mapa con su nombre recortado y no
+       * habia forma de saber nada mas: ni cuanto cuesta, ni en que estado
+       * esta, ni por que aporta alcance o por que no. El dato estaba en la
+       * capa desde el principio.
+       *
+       * Va en su propia ventana y no en el globo de los demas: aquella se
+       * cierra sola al mover el raton porque acompana al cursor, y esto es
+       * algo que uno abre para leer. Lleva su aspa.
+       *
+       * LA MITAD DE LOS CAMPOS ESTAN VACIOS en el inventario —uso y tipologia
+       * en el 34 %, el sitio en el 24 %—, asi que la ficha dice «sin dato» en
+       * vez de dejar el hueco: una linea en blanco parece un fallo de la
+       * pagina, y lo que pasa es que nadie lo ha llenado todavia.
+       */
+      const fichaProyecto = new maplibregl.Popup({
+        closeButton: true,
+        closeOnClick: true,
+        maxWidth: '320px',
+        className: 'gr-ficha-proyecto',
+      })
+      const abrirProyecto = (e: maplibregl.MapLayerMouseEvent) => {
+        const f = e.features?.[0]
+        if (!f) return
+        const p = f.properties ?? {}
+        const texto = (v: unknown) => {
+          const s = String(v ?? '').trim()
+          return s && s !== 'null' && s !== 'undefined' ? s : null
+        }
+        const fila = (rotulo: string, valor: string | null) =>
+          `<div style="display:flex;gap:8px;margin-top:3px">` +
+          `<span style="opacity:.65;min-width:84px">${rotulo}</span>` +
+          `<span${valor ? '' : ' style="opacity:.45;font-style:italic"'}>` +
+          `${valor ?? 'sin dato'}</span></div>`
+
+        const monto = Number(p.monto)
+        const montoTexto = Number.isFinite(monto) && monto > 0
+          ? monto.toLocaleString('es-EC', {
+              style: 'currency', currency: 'USD', maximumFractionDigits: 0,
+            })
+          : null
+        const donde = texto(p.barrio) ?? texto(p.plataforma) ?? texto(p.parroquia)
+        // La escala es la que ata el proyecto al analisis: «proximidad» es lo
+        // que se mide a pie en las isocronas, «ciudad» lo que sirve al canton
+        // entero y no se juzga por el radio de caminata. Solo 11 de los 41 la
+        // declaran.
+        const esc = texto(p.escala)
+        const escalaTexto =
+          esc === 'proximidad' ? 'De proximidad' : esc === 'ciudad' ? 'De ciudad' : null
+        const aporta = p.aporta === true || p.aporta === 'true'
+
+        const c = (f.geometry as GeoJSON.Point).coordinates
+        fichaProyecto
+          .setLngLat([c[0], c[1]])
+          .setHTML(
+            `<div style="font-size:12.5px;line-height:1.45">` +
+              `<div style="font-weight:700;margin-bottom:6px">${texto(p.nombre) ?? 'Proyecto sin nombre'}</div>` +
+              fila('Monto', montoTexto) +
+              fila('Estado', texto(p.estado)) +
+              fila('Categoría', texto(p.categoria)) +
+              fila('Dónde', donde) +
+              fila('Uso', texto(p.uso)) +
+              fila('Tipología', texto(p.tipologia)) +
+              fila('Escala', escalaTexto) +
+              `<div style="margin-top:7px;padding-top:6px;border-top:1px solid currentColor;opacity:.9">` +
+                `<b>${aporta ? 'Suma alcance nuevo' : 'No suma alcance nuevo'}</b>` +
+                (texto(p.nota) ? `<br>${texto(p.nota)}` : '') +
+              `</div>` +
+            `</div>`,
+          )
+          .addTo(m)
+      }
+      for (const capa of ['proyectos', 'proyectos-icono']) {
+        m.on('click', capa, abrirProyecto)
+        m.on('mouseenter', capa, () => {
+          m.getCanvas().style.cursor = 'pointer'
+        })
+        m.on('mouseleave', capa, () => {
+          m.getCanvas().style.cursor = ''
+        })
+      }
+
       m.on('click', 'pois', (e) => {
         const f = e.features?.[0]
         if (f) cb.current.onSeleccionar(String(f.properties?.id ?? ''))
@@ -1622,6 +1706,14 @@ export default function Mapa({
             nota: p.nota,
             monto: p.monto,
             estado: p.estado,
+            // Lo que faltaba para poder abrir la ficha al pulsar: hasta aquí
+            // el punto llevaba lo justo para pintarse y nada para explicarse.
+            categoria: p.categoria,
+            parroquia: p.parroquia,
+            barrio: p.barrio ?? '',
+            plataforma: p.plataforma ?? '',
+            tipologia: p.tipologia ?? '',
+            escala: p.escala ?? '',
           },
         })),
       }
