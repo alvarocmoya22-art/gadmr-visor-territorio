@@ -5,6 +5,7 @@ import type { CapasVisibles, MapaCalor } from './Mapa'
 import { URBANO, type Barrio, type Plataforma } from '../lib/municipal'
 import { colorUso } from '../lib/usos'
 import { MAPAS_BASE } from '../config/mapasBase'
+import { MODELOS_3D } from '../config/modelos3d'
 import { hayToken as hayTokenMapillary } from '../lib/mapillary'
 
 interface Props {
@@ -77,6 +78,7 @@ const CAPAS: { clave: keyof CapasVisibles; rotulo: string }[] = [
   { clave: 'edificios', rotulo: 'Edificación en 3D' },
   { clave: 'proyectos', rotulo: 'Proyectos 2026' },
   { clave: 'catastro', rotulo: 'Catastro · predios' },
+  { clave: 'modelo3d', rotulo: 'Parque Guayaquil · proyecto 3D' },
   { clave: 'mapillary', rotulo: 'Fotos de calle (Mapillary)' },
 ]
 
@@ -284,6 +286,27 @@ export default function Filtros({
                 </label>
                 {/* La leyenda solo con la capa encendida: ocupa seis lineas y
                     sin la capa en el mapa no explica nada. */}
+                {/* El modelo del proyecto es la única capa que NO es un
+                    levantamiento: es una propuesta, y encima puesta sobre el
+                    mapa a mano. Eso tiene que leerse junto a la casilla, no
+                    enterrado en el código, porque sobre un mapa la gente mide
+                    y aquí lo medido sería un proyecto, no lo que existe. */}
+                {c.clave === 'modelo3d' &&
+                  capas.modelo3d &&
+                  MODELOS_3D.map((mo) => (
+                    <p
+                      key={mo.clave}
+                      className="mb-1 ml-5 mt-1 text-[12px] leading-snug"
+                      style={{ color: 'var(--gr-tinta-3)' }}
+                    >
+                      Propuesta, no obra ejecutada. {mo.procedencia}. {mo.ajuste}.
+                      <br />
+                      <span style={{ opacity: 0.85 }}>
+                        El trazo discontinuo es la laguna tal como está hoy:
+                        5.158 m² de agua, frente a 3.125 m² proyectados.
+                      </span>
+                    </p>
+                  ))}
                 {/* Dos clases, dos tonos: sin leyenda, una mancha terracota y
                     otra oliva no dicen cuál es cuál. */}
                 {c.clave === 'cobertura' && capas.cobertura && (

@@ -1,0 +1,32 @@
+{
+ "archivo": "datos/parque_guayaquil.glb",
+ "origen": "REHABILITACIÒN DE ZONAS INTERNAS PARQUE GUAYAQUIL.ifc",
+ "esquema": "IFC2X3",
+ "programa": "Graphisoft - Archicad - 28.2.0",
+ "fecha_export": "2026-11-10T16:03:18",
+ "proyecto": "Proyecto",
+ "piezas": 922,
+ "triangulos": 470305,
+ "medidas_m": [
+  145.6,
+  126.1,
+  13.9
+ ],
+ "descartado": [
+  {
+   "piezas": 225,
+   "medidas_m": [
+    40.8,
+    11.2
+   ]
+  },
+  {
+   "piezas": 131,
+   "medidas_m": [
+    41.3,
+    10.5
+   ]
+  }
+ ],
+ "georreferencia": "no viene en el IFC; se fija a mano en src/config/modelos3d.ts"
+}

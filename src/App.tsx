@@ -81,6 +81,9 @@ const CAPAS_INICIALES: CapasVisibles = {
   proyectos: false,
   // Catorce megas: igual que la edificacion, solo si se pide.
   catastro: false,
+  // Diez megas de modelo de arquitectura, y solo cubre una manzana del
+  // canton: no tiene sentido traerlo si nadie lo pide.
+  modelo3d: false,
 }
 
 export default function App() {

@@ -17,6 +17,8 @@ import {
 } from '../lib/municipal'
 import { urlTeselas as urlTeselasMapillary } from '../lib/mapillary'
 import { distanciaM } from '../lib/geo'
+import { MODELOS_3D } from '../config/modelos3d'
+import { capaModelo, type CapaModelo } from '../lib/modelo3d'
 import type { Calle } from '../lib/calles'
 import type { Barrio } from '../lib/municipal'
 import {
@@ -81,6 +83,8 @@ export interface CapasVisibles {
   proyectos: boolean
   /** Linderos de predio del catastro municipal. */
   catastro: boolean
+  /** El modelo de arquitectura de un proyecto, sobre su sitio. */
+  modelo3d: boolean
 }
 
 interface Props {
@@ -2045,6 +2049,87 @@ export default function Mapa({
       if (fuente && redVialGeo.current) fuente.setData(redVialGeo.current)
     })
   }, [redVialLista, mapaListo])
+
+  /*
+   * El modelo de arquitectura del proyecto, sobre su sitio.
+   *
+   * La capa se crea la primera vez que alguien la enciende —antes de eso el
+   * .glb no se descarga— y luego se queda: quitarla y volver a ponerla
+   * obligaria a bajar los diez megas otra vez.
+   *
+   * Y al encenderla se va al parque. Un modelo de 146 metros con el canton
+   * entero a la vista es un punto; sin acercarse e inclinar no se ve nada de
+   * lo unico que esta capa tiene que ensenar.
+   */
+  const modelos = useRef<CapaModelo[]>([])
+
+  useEffect(() => {
+    if (!capas.modelo3d) {
+      for (const c of modelos.current) c.mostrar(false)
+      cuandoListo((m) => {
+        if (m.getLayer('laguna-referencia-linea')) {
+          m.setLayoutProperty('laguna-referencia-linea', 'visibility', 'none')
+        }
+      })
+      return
+    }
+    cuandoListo((m) => {
+      if (!modelos.current.length) {
+        /*
+         * Primero el contorno de la laguna como esta hoy, debajo del modelo.
+         *
+         * Es el levantamiento contra el que se encajo la propuesta, y por eso
+         * se dibuja: quien mire el mapa puede juzgar el ajuste sin creerse un
+         * porcentaje escrito en una nota. Ademas ensena lo que el proyecto
+         * cambia, que es de lo que trata la obra —5.158 m2 de agua hoy,
+         * 3.125 proyectados—. Va en trazo discontinuo para que se lea como
+         * referencia y no como una capa mas del inventario.
+         */
+        if (!m.getSource('laguna-referencia')) {
+          m.addSource('laguna-referencia', {
+            type: 'geojson',
+            data: `${import.meta.env.BASE_URL}datos/laguna_referencia.geojson`,
+          })
+          m.addLayer({
+            id: 'laguna-referencia-linea',
+            type: 'line',
+            source: 'laguna-referencia',
+            minzoom: MODELOS_3D[0]?.zoomMin ?? 14,
+            paint: {
+              'line-color': '#6fd0e8',
+              'line-width': 2.2,
+              'line-dasharray': [2, 2],
+              'line-opacity': 0.9,
+            },
+          })
+        }
+        for (const cfg of MODELOS_3D) {
+          const capa = capaModelo(cfg, import.meta.env.BASE_URL)
+          m.addLayer(capa)
+          modelos.current.push(capa)
+        }
+        // Y el contorno por encima del modelo, no por debajo: las losas del
+        // proyecto cubren el suelo y lo escondian entero. Se dibuja al final
+        // para que la referencia se vea sobre lo que hay que juzgar.
+        if (m.getLayer('laguna-referencia-linea')) m.moveLayer('laguna-referencia-linea')
+      }
+      if (m.getLayer('laguna-referencia-linea')) {
+        m.setLayoutProperty('laguna-referencia-linea', 'visibility', 'visible')
+      }
+      for (const c of modelos.current) c.mostrar(true)
+      const primero = MODELOS_3D[0]
+      if (primero && m.getZoom() < primero.zoomMin + 2) {
+        m.easeTo({
+          center: [primero.lon, primero.lat],
+          zoom: 17,
+          pitch: PITCH_EDIFICIOS,
+          duration: 1200,
+        })
+      } else if (m.getPitch() < 20) {
+        m.easeTo({ pitch: PITCH_EDIFICIOS, duration: 700 })
+      }
+    })
+  }, [capas.modelo3d, mapaListo])
 
   /*
    * El catastro son catorce megas en claro —menos de dos al viajar comprimido—
