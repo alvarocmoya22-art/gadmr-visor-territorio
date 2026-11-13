@@ -1054,8 +1054,30 @@ export default function App() {
           className="shrink-0 rounded"
         />
         <div className="mr-auto">
-          <h1 className="text-[15px] font-bold" style={{ color: 'var(--gr-tinta)' }}>
-            Visor de Territorio · GADM Riobamba
+          {/*
+           * El nombre y de quién es hijo, en ese orden.
+           *
+           * ÑAWI es «ojo» en kichwa, y es una de las cuatro ventanas del
+           * observatorio LLACTA —el pueblo—. Sin el enlace de vuelta, las
+           * cuatro ventanas solo existen desde LLACTA y cada herramienta
+           * parece suelta; con él, quien entra por aquí sabe que hay un
+           * observatorio detrás y cómo llegar.
+           */}
+          <h1
+            className="flex flex-wrap items-baseline gap-x-2 text-[15px] font-bold"
+            style={{ color: 'var(--gr-tinta)' }}
+          >
+            <span className="text-[17px] tracking-[.06em]">ÑAWI</span>
+            <span className="font-semibold" style={{ color: 'var(--gr-tinta-2)' }}>
+              Visor de Territorio · GADM Riobamba
+            </span>
+            <a
+              href="https://alvarocmoya22-art.github.io/gadmr-llacta/"
+              className="gr-num text-[11px] font-normal underline-offset-2 hover:underline"
+              style={{ color: 'var(--gr-azul-500)' }}
+            >
+              LLACTA ↗
+            </a>
           </h1>
           <p className="gr-num text-[11px]" style={{ color: 'var(--gr-tinta-3)' }}>
             {/* Tres estados y no dos: mientras no hubiera datos, esto decia

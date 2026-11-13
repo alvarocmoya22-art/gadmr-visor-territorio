@@ -1,4 +1,11 @@
-# Visor de Territorio · GADM Riobamba
+# ÑAWI · Visor de Territorio · GADM Riobamba
+
+> **ÑAWI** es «ojo» en kichwa. Es la primera de las cuatro ventanas del
+> observatorio urbano [LLACTA](https://alvarocmoya22-art.github.io/gadmr-llacta/)
+> —«pueblo»—, junto a CHASKI, la Mapoteca y el Levantamiento.
+>
+> La dirección del sitio sigue siendo `gadmr-visor-territorio`: renombrar el
+> repositorio rompería los enlaces ya publicados.
 
 Tablero interno para dirigir y controlar el levantamiento territorial del cantón
 Riobamba. Cruza tres fuentes —OpenStreetMap, la vista de calle de Mapillary y el
