@@ -311,6 +311,28 @@ cientos de kilobytes al abrir.
 
 El protocolo `pmtiles://` se registra una vez por carga, en `Mapa.tsx`.
 
+### Y por qué además hay un zip
+
+El mismo script escribe también `datos/edificaciones_2023.zip`: las mismas
+166.530 edificaciones como **shapefile comprimido, 12,7 MB**, con dos campos de
+más —`alt_max_m` y `nom_parroq`— y sin la columna de teselas.
+
+No es una duplicación por comodidad. **Las teselas sirven para pintar y no para
+contar**: vienen recortadas por el borde de cada cuadro, así que una edificación
+a caballo entre dos aparece dos veces y con la mitad de la superficie cada vez.
+Eso se dibuja bien y da una tabla falsa. Quien quiera medir necesita los
+objetos enteros, y para eso está el zip.
+
+Lo consume CHASKI, que lo ofrece en *Capas del municipio → Edificación del
+cantón* y lo abre por la extensión, igual que un archivo soltado a mano. Va
+comprimido y no en GeoJSON porque en GeoJSON son **50 MB que se quedarían para
+siempre en el historial de este repositorio**; así son la cuarta parte. Lleva
+su `.cpg` declarando UTF-8: sin él, el lector adivina y Licán, Punín y Cubijíes
+pierden la tilde.
+
+El aviso de que la altura está estimada y no medida viaja con la capa hasta
+allí, en la nota del catálogo, que es lo que se lee antes de traerla.
+
 ### Lo que se perdió al cambiar
 
 La capa anterior eran **6.039 edificios de OpenStreetMap** dentro de las 18

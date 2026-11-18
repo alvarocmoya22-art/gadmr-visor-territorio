@@ -43,6 +43,26 @@ warnings.filterwarnings("ignore")
 BASE = Path(__file__).resolve().parent.parent / "public" / "datos"
 SALIDA = BASE / "edificaciones_2023.pmtiles"
 
+# La misma edificacion, otra vez, como shapefile comprimido.
+#
+# POR QUE DOS SALIDAS. Las teselas sirven para PINTAR: el navegador pide las
+# que caben en pantalla y nunca tiene la capa entera. Para CONTAR hacen falta
+# los 166.530 objetos completos, y una tesela no los da: vienen recortados por
+# el borde de cada cuadro, asi que un edificio a caballo entre dos sale dos
+# veces y con la mitad del area cada vez. Serviria para un mapa y mentiria en
+# una tabla.
+#
+# POR QUE ZIP Y NO GEOJSON. En GeoJSON son 50 MB que quedan para siempre en el
+# historial del repositorio. En shapefile comprimido son la cuarta parte, y
+# CHASKI ya lo lee sin una linea de codigo nueva. Que viaje como zip no es un
+# apaño: es como viaja un shapefile, que son cinco archivos o no es nada.
+SALIDA_ZIP = BASE / "edificaciones_2023.zip"
+
+# Lo que va dentro del zip. Los nombres no pasan de diez caracteres porque el
+# formato DBF los corta ahi sin avisar, y un campo renombrado a medias rompe
+# cualquier expresion escrita contra el.
+CAPA_ZIP = "edificaciones_2023"
+
 # Hasta z16: una edificacion de 48 m2 —la mediana— no se distingue mas alla, y
 # cada zoom extra multiplica el archivo. Desde z11 para que al abrir el canton
 # se vea la mancha construida sin pedir nada mas.
@@ -61,7 +81,11 @@ def main(origen: Path) -> None:
     g = gpd.read_file(origen)
     log(f"  leidas: {len(g):,}  ·  {g.crs}")
 
-    falta = [c for c in ("alt_med_m", "pisos_est", "confiab", "area_m2") if c not in g.columns]
+    falta = [
+        c
+        for c in ("alt_med_m", "alt_max_m", "pisos_est", "confiab", "area_m2", "nom_parroq")
+        if c not in g.columns
+    ]
     if falta:
         log(f"  ERROR: a la capa le faltan campos: {', '.join(falta)}")
         sys.exit(1)
@@ -77,18 +101,37 @@ def main(origen: Path) -> None:
     # Una altura de modelo con un decimal ya es mas precision de la que tiene:
     # el error declarado es de metro y medio.
     g["alt_med_m"] = g["alt_med_m"].round(1)
-    g["area_m2"] = g["area_m2"].round(0).astype(int)
-    g = g[["alt_med_m", "pisos_est", "confiab", "area_m2", "geometry"]].to_crs(4326)
+    g["alt_max_m"] = g["alt_max_m"].round(1)
+    g["area_m2"] = g["area_m2"].round(0).astype("int32")
+    g["pisos_est"] = g["pisos_est"].astype("int32")
+    g = g.to_crs(4326)
 
     alt = g["alt_med_m"]
     log(f"  altura: mediana {alt.median():.1f} m  ·  max {alt.max():.1f} m")
     log(f"  pisos: mediana {g['pisos_est'].median():.0f}  ·  max {g['pisos_est'].max()}")
 
+    # La capa que se pinta lleva solo lo que la extrusion y la ficha usan. La
+    # que se analiza lleva dos campos mas: la parroquia, para poder agrupar sin
+    # cruzar 166.530 poligonos contra otra capa en el navegador, y la altura
+    # maxima, que junto a la media dice si el volumen es parejo o escalonado.
+    tesela = g[["alt_med_m", "pisos_est", "confiab", "area_m2", "geometry"]]
+    tabla = g[
+        [
+            "alt_med_m",
+            "alt_max_m",
+            "pisos_est",
+            "confiab",
+            "area_m2",
+            "nom_parroq",
+            "geometry",
+        ]
+    ]
+
     if SALIDA.exists():
         SALIDA.unlink()
     BASE.mkdir(parents=True, exist_ok=True)
     pyogrio.write_dataframe(
-        g,
+        tesela,
         SALIDA,
         driver="PMTiles",
         layer="edificaciones",
@@ -103,7 +146,53 @@ def main(origen: Path) -> None:
     mb = SALIDA.stat().st_size / 1048576
     log()
     log(f"  {SALIDA.name}  {mb:,.1f} MB  ·  z{ZOOM_MIN}-{ZOOM_MAX}  ·  capa «edificaciones»")
+
+    escribir_zip(tabla)
     log("listo")
+
+
+def escribir_zip(tabla) -> None:
+    """El shapefile comprimido, para analizar la capa entera."""
+    import shutil
+    import tempfile
+    import zipfile
+
+    import pyogrio
+
+    log()
+    log("  --- shapefile comprimido ---")
+    with tempfile.TemporaryDirectory() as tmp:
+        carpeta = Path(tmp)
+        # RESIZE ajusta cada columna del DBF a lo que de verdad ocupa. Sin el,
+        # GDAL le da a cada decimal 24 caracteres de ancho y 15 decimales —a un
+        # valor redondeado a uno— y el DBF pasa de 14 a 39 MB. En el zip apenas
+        # se nota, porque el relleno se comprime, pero el navegador si tiene
+        # que descomprimir y recorrer esos 25 MB de espacios.
+        pyogrio.write_dataframe(
+            tabla,
+            carpeta / f"{CAPA_ZIP}.shp",
+            driver="ESRI Shapefile",
+            encoding="UTF-8",
+            RESIZE="YES",
+        )
+        # El .cpg declara que el DBF va en UTF-8. Sin el, el lector adivina y se
+        # queda con la pagina de codigos de los ochenta: «Lican» y «Yaruquies»
+        # pierden la tilde y «Cubijies» sale partido. Son dos bytes de archivo.
+        (carpeta / f"{CAPA_ZIP}.cpg").write_text("UTF-8", encoding="ascii")
+
+        if SALIDA_ZIP.exists():
+            SALIDA_ZIP.unlink()
+        with zipfile.ZipFile(
+            SALIDA_ZIP, "w", zipfile.ZIP_DEFLATED, compresslevel=9
+        ) as z:
+            for parte in sorted(carpeta.iterdir()):
+                z.write(parte, parte.name)
+                log(f"    {parte.name:<28} {parte.stat().st_size / 1048576:6,.1f} MB")
+        shutil.rmtree(carpeta, ignore_errors=True)
+
+    mb = SALIDA_ZIP.stat().st_size / 1048576
+    log(f"  {SALIDA_ZIP.name}  {mb:,.1f} MB  ·  {len(tabla):,} edificaciones")
+    log(f"  campos: {', '.join(c for c in tabla.columns if c != 'geometry')}")
 
 
 if __name__ == "__main__":
