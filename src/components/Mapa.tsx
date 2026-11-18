@@ -71,6 +71,15 @@ export interface CapasVisibles {
   parroquias: boolean
   /** El reparto oficial del canton entre suelo urbano y suelo rural. */
   suelo: boolean
+  /**
+   * Los poligonos de intervencion territorial del PUGS.
+   *
+   * La clasificacion dice DONDE acaba lo urbano; esta dice QUE SE PUEDE HACER
+   * en cada trozo de ello: tratamiento, lote minimo, cuantos pisos, cuanto
+   * ocupa, que retiros y que usos. Es la unica capa del visor que contesta la
+   * pregunta que de verdad llega al mostrador.
+   */
+  pit: boolean
   /** Que hay encima del suelo: bosque, cultivo, construido. ESA WorldCover. */
   cobertura: boolean
   /** La red vial oficial del canton, la del GADPCH. */
@@ -444,6 +453,52 @@ function colorEstadoCotejo(): ExpressionSpecification {
 }
 
 /**
+ * El color de cada tratamiento del PUGS.
+ *
+ * Sigue la mano que se mete, de menos a mas: conservar, sostener, consolidar,
+ * mejorar, renovar, desarrollar. Son categorias nominales y la norma no las
+ * ordena, pero leidas asi la leyenda cuenta algo —donde se protege y donde se
+ * construye— en vez de ser seis colores sueltos. Seis de los ocho de la serie,
+ * sin repetir ninguno: dos tratamientos del mismo color es un plano mal leido.
+ *
+ * Esta en una funcion y no escrito en la capa porque hace falta tres veces: el
+ * relleno, la linea y el repintado al cambiar de tema. Escrito tres veces,
+ * cambiar un color en un sitio y no en los otros dos es cuestion de tiempo.
+ */
+function colorPit(): ExpressionSpecification {
+  const raiz = getComputedStyle(document.documentElement)
+  const leer = (v: string) => raiz.getPropertyValue(v).trim()
+  return [
+    'match',
+    ['get', 'tratamiento'],
+    'CONSERVACIÓN', leer('--gr-s3'),
+    'SOSTENIMIENTO', leer('--gr-s1'),
+    'CONSOLIDACIÓN', leer('--gr-s6'),
+    'MEJORAMIENTO INTEGRAL', leer('--gr-s4'),
+    'RENOVACIÓN', leer('--gr-s2'),
+    'DESARROLLO', leer('--gr-s5'),
+    leer('--gr-tinta-3'),
+  ] as unknown as ExpressionSpecification
+}
+
+/**
+ * Los rotulos, el color y el peso de cada tratamiento, para la leyenda.
+ *
+ * Las hectareas van escritas y no contadas en vivo porque la leyenda se dibuja
+ * antes de que la capa se descargue: contarlas obligaria a tener el archivo
+ * para poder enseñar de que va. Salen de `scripts/pit_urbano.py`, que las
+ * imprime en cada corrida; si la capa cambia, el script lo canta.
+ */
+export const TRATAMIENTOS_PIT = [
+  { clave: 'CONSERVACIÓN', rotulo: 'Conservación', token: '--gr-s3', ha: 401 },
+  { clave: 'SOSTENIMIENTO', rotulo: 'Sostenimiento', token: '--gr-s1', ha: 906 },
+  { clave: 'CONSOLIDACIÓN', rotulo: 'Consolidación', token: '--gr-s6', ha: 644 },
+  { clave: 'MEJORAMIENTO INTEGRAL', rotulo: 'Mejoramiento integral', token: '--gr-s4', ha: 708 },
+  { clave: 'RENOVACIÓN', rotulo: 'Renovación', token: '--gr-s2', ha: 412 },
+  { clave: 'DESARROLLO', rotulo: 'Desarrollo', token: '--gr-s5', ha: 484 },
+] as const
+
+/**
  * Relee los tokens del tema activo y los vuelve a pintar en el mapa.
  * MapLibre resuelve los colores una sola vez, así que sin esto un cambio de
  * tema dejaría el mapa con la paleta del tema anterior.
@@ -463,6 +518,8 @@ function aplicarColoresTema(m: maplibregl.Map) {
   pintar('red-vial-halo', 'line-color', leer('--gr-red-vial-halo'))
   pintar('red-vial-linea', 'line-color', colorDeRodadura())
   pintar('suelo-relleno', 'fill-color', leer('--gr-suelo-relleno'))
+  pintar('pit-relleno', 'fill-color', colorPit())
+  pintar('pit-linea', 'line-color', colorPit())
   pintar('parroquias-linea', 'line-color', leer('--gr-limite-parroquia'))
   pintar('plataformas-relleno', 'fill-color', azul)
   pintar('plataformas-halo', 'line-color', leer('--gr-superficie'))
@@ -739,6 +796,35 @@ export default function Mapa({
           // Translúcida: debajo está el lienzo con las calles, y la cobertura
           // es contexto, no el dato principal.
           paint: { 'raster-opacity': 0.55, 'raster-resampling': 'nearest' },
+        },
+        'deficit-relleno',
+      )
+
+      /*
+       * Los poligonos de intervencion territorial, coloreados por tratamiento.
+       *
+       * Van tambien debajo del analisis, por el mismo motivo que la
+       * clasificacion: son el suelo sobre el que se lee, no una mancha con la
+       * que competir con las coropletas.
+       */
+      m.addSource('pit', { type: 'geojson', data: VACIO })
+      m.addLayer(
+        {
+          id: 'pit-relleno',
+          type: 'fill',
+          source: 'pit',
+          layout: { visibility: 'none' },
+          paint: { 'fill-color': colorPit(), 'fill-opacity': 0.38 },
+        },
+        'deficit-relleno',
+      )
+      m.addLayer(
+        {
+          id: 'pit-linea',
+          type: 'line',
+          source: 'pit',
+          layout: { visibility: 'none' },
+          paint: { 'line-color': colorPit(), 'line-width': 1.1, 'line-opacity': 0.9 },
         },
         'deficit-relleno',
       )
@@ -1514,6 +1600,155 @@ export default function Mapa({
         })
       }
 
+      /*
+       * La ficha del poligono de intervencion territorial.
+       *
+       * Es la unica pantalla del visor que contesta «que puedo hacer en este
+       * predio», que es la pregunta que llega al mostrador. Por eso lleva la
+       * norma entera y no un resumen: quien la abre no quiere saber el
+       * tratamiento, quiere saber cuantos pisos y cuanto retiro.
+       *
+       * EL HUECO SE DICE, NO SE RELLENA. Donde la norma no fija nada, la capa
+       * no trae valor —`scripts/pit_urbano.py` vacia los «---» a proposito— y
+       * aqui sale «no fija». Un cero seria una afirmacion: «retiro cero» es
+       * una regla, «la norma no dice» es otra cosa muy distinta, y en una
+       * ficha de urbanismo confundirlas tiene consecuencias.
+       *
+       * Los usos van con su propio desplazamiento: son cuatro listas de hasta
+       * 254 caracteres y sin acotarlas la ficha se come la pantalla.
+       */
+      const fichaPit = new maplibregl.Popup({
+        closeButton: true,
+        closeOnClick: true,
+        maxWidth: '340px',
+        className: 'gr-ficha-proyecto',
+      })
+      m.on('click', 'pit-relleno', (e) => {
+        const f = e.features?.[0]
+        if (!f) return
+        const p = f.properties ?? {}
+        const v = (k: string) => {
+          const s = String(p[k] ?? '').trim()
+          return s && s !== 'null' && s !== 'undefined' ? s : null
+        }
+        const vacio = `<span style="opacity:.45;font-style:italic">no fija</span>`
+        const dato = (k: string, unidad = '') => {
+          const x = v(k)
+          return x ? `${x}${unidad}` : vacio
+        }
+        const fila = (rotulo: string, cuerpo: string) =>
+          `<div style="display:flex;gap:8px;margin-top:3px">` +
+          `<span style="opacity:.65;min-width:96px;flex:none">${rotulo}</span>` +
+          `<span>${cuerpo}</span></div>`
+        const titulo = (t: string) =>
+          `<div style="margin-top:9px;padding-top:6px;border-top:1px solid currentColor;` +
+          `opacity:.55;font-size:10.5px;letter-spacing:.07em;text-transform:uppercase">${t}</div>`
+        const uso = (rotulo: string, k: string) => {
+          const x = v(k)
+          if (!x) return ''
+          return (
+            `<div style="margin-top:5px">` +
+            `<div style="opacity:.65">${rotulo}</div>` +
+            `<div style="max-height:84px;overflow:auto;font-size:11.5px;line-height:1.35">${x}</div>` +
+            `</div>`
+          )
+        }
+
+        const ha = Number(p.area_ha)
+        const pisos =
+          v('edif_bas') || v('edif_max')
+            ? `${dato('edif_bas')} básica · ${dato('edif_max')} máxima`
+            : vacio
+        const cos =
+          v('cos_pb') || v('cos_total')
+            ? `${dato('cos_pb', ' %')} en planta baja · ${dato('cos_total', ' %')} total` +
+              (v('cos_total_max') ? ` (${v('cos_total_max')} % máximo)` : '')
+            : vacio
+        /*
+         * Casi ningun PIT fija altura maxima: solo 17 de los 170. Escrito como
+         * «12 m a no fija» se lee como una frase rota; escrito «desde 12 m»
+         * dice lo mismo y es castellano.
+         */
+        const altura = v('altura_max')
+          ? `${dato('altura_min', ' m')} a ${v('altura_max')} m`
+          : v('altura_min')
+            ? `desde ${v('altura_min')} m`
+            : vacio
+
+        fichaPit
+          .setLngLat(e.lngLat)
+          .setHTML(
+            /*
+             * La ficha entera se desplaza. La norma de un PIT no cabe en el
+             * alto de un mapa —menos en una ventana estrecha, donde el mapa
+             * mide quinientos pixeles— y sin esto el usuario lee hasta los
+             * retiros y los usos se quedan fuera de la pantalla, sin nada que
+             * indique que habia mas.
+             */
+            `<div style="font-size:12.5px;line-height:1.45;max-height:56vh;overflow:auto">` +
+              `<div style="font-weight:700">${v('codigo_pit') ?? 'PIT sin código'}` +
+              (v('nam_pit') ? ` · ${v('nam_pit')}` : '') +
+              `</div>` +
+              `<div style="opacity:.75;margin-bottom:2px">${v('tratamiento') ?? ''}</div>` +
+              `<div style="opacity:.6;font-size:11.5px">${v('subc_suelo') ?? ''}` +
+              (Number.isFinite(ha) ? ` · ${ha.toLocaleString('es-EC')} ha` : '') +
+              `</div>` +
+              titulo('Qué se puede construir') +
+              fila('Lote mínimo', dato('lote_min', ' m²')) +
+              fila('Frente mínimo', dato('f_min', ' m')) +
+              fila('Pisos', pisos) +
+              fila('Altura', altura) +
+              fila('COS', cos) +
+              fila('Implantación', dato('implantacion')) +
+              titulo('Retiros') +
+              fila('Frontal', dato('r_frontal', ' m')) +
+              fila('Lateral', dato('r_lateral', ' m')) +
+              fila('Posterior', dato('r_posterior', ' m')) +
+              titulo('Usos') +
+              /*
+               * El aviso va ARRIBA de las listas, no debajo.
+               *
+               * 156 de los 170 PIT traen alguna lista cortada por el tope de
+               * 254 bytes del shapefile, y el prohibido es el peor: esta
+               * cortado en 140. Leer media lista de prohibiciones y concluir
+               * que algo se puede hacer es el error que esta ficha tiene que
+               * impedir, y un aviso al final se lee despues de haber sacado
+               * la conclusion.
+               */
+              (v('texto_cortado')
+                ? `<div style="margin:5px 0;padding:5px 7px;border-radius:4px;` +
+                  `background:color-mix(in srgb, var(--gr-aviso) 18%, transparent);` +
+                  `font-size:11.5px;line-height:1.35">` +
+                  `<b>Lista incompleta.</b> El archivo de origen corta el texto a ` +
+                  `254 caracteres, y aquí está cortado: ${v('texto_cortado')}. ` +
+                  `Lo que acaba en «…» sigue en la ordenanza.` +
+                  `</div>`
+                : '') +
+              uso('General', 'u_general') +
+              uso('Principal', 'u_principal') +
+              uso('Complementario', 'u_complementario') +
+              uso('Restringido', 'u_restringido') +
+              uso('Prohibido', 'u_prohibido') +
+              (v('observaciones') || v('consideraciones')
+                ? titulo('Notas') +
+                  (v('observaciones')
+                    ? `<div style="font-size:11.5px">${v('observaciones')}</div>`
+                    : '') +
+                  (v('consideraciones')
+                    ? `<div style="font-size:11.5px;margin-top:4px">${v('consideraciones')}</div>`
+                    : '')
+                : '') +
+            `</div>`,
+          )
+          .addTo(m)
+      })
+      m.on('mouseenter', 'pit-relleno', () => {
+        m.getCanvas().style.cursor = 'pointer'
+      })
+      m.on('mouseleave', 'pit-relleno', () => {
+        m.getCanvas().style.cursor = ''
+      })
+
       m.on('click', 'pois', (e) => {
         const f = e.features?.[0]
         if (f) cb.current.onSeleccionar(String(f.properties?.id ?? ''))
@@ -2168,6 +2403,42 @@ export default function Mapa({
   }, [catastroListo, mapaListo])
 
   /*
+   * Los PIT son seiscientos kilobytes y siguen la misma regla: no se piden
+   * hasta que alguien enciende la capa. No los descarga quien viene a mirar
+   * equipamientos.
+   */
+  const pitGeo = useRef<GeoJSON.FeatureCollection | null>(null)
+  const [pitListo, setPitListo] = useState(false)
+
+  useEffect(() => {
+    if (!capas.pit || pitGeo.current) return
+    let vivo = true
+    void (async () => {
+      try {
+        const resp = await fetch(`${import.meta.env.BASE_URL}datos/pit_urbano.geojson`, {
+          cache: 'force-cache',
+        })
+        if (!resp.ok || !vivo) return
+        pitGeo.current = (await resp.json()) as GeoJSON.FeatureCollection
+        if (vivo) setPitListo(true)
+      } catch {
+        // Sin los PIT el visor sigue entero; no hay nada que avisar.
+      }
+    })()
+    return () => {
+      vivo = false
+    }
+  }, [capas.pit])
+
+  useEffect(() => {
+    if (!pitListo || !pitGeo.current) return
+    cuandoListo((m) => {
+      const fuente = m.getSource('pit') as maplibregl.GeoJSONSource | undefined
+      if (fuente && pitGeo.current) fuente.setData(pitGeo.current)
+    })
+  }, [pitListo, mapaListo])
+
+  /*
    * Al encender la capa se inclina la camara. Un modelo en tres dimensiones
    * visto en planta es un mapa de manchas: sin inclinar no se ve lo unico que
    * esta capa aporta.
@@ -2197,6 +2468,8 @@ export default function Mapa({
       poner('cobertura-suelo-imagen', capas.cobertura)
       poner('suelo-relleno', capas.suelo)
       poner('suelo-linea', capas.suelo)
+      poner('pit-relleno', capas.pit)
+      poner('pit-linea', capas.pit)
       poner('parroquias-linea', capas.parroquias)
       poner('barrios-relleno', capas.barrios)
       poner('barrios-halo', capas.barrios)

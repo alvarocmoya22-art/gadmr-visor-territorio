@@ -370,6 +370,57 @@ disparan a la vez, de modo que leer el ángulo a mitad de la animación lo
 congelaba en cero: con la capa encendida se toma la inclinación que le toca, no
 la que haya en ese instante.
 
+### Polígonos de intervención territorial (PUGS)
+
+Se encienden en **Capas del mapa → Polígonos de intervención · PUGS**: los
+**170 PIT del suelo urbano**, coloreados por tratamiento, con la norma entera
+al pinchar uno. Suman **3.556 ha**, que es exactamente el suelo urbano del
+cantón: los PIT lo cubren sin hueco ni sobra.
+
+Es la única pantalla del visor que contesta **«qué puedo hacer en este
+predio»**, que es la pregunta que de verdad llega al mostrador. La ficha da
+lote y frente mínimos, pisos básicos y máximos, altura, COS en planta baja y
+total, implantación, los tres retiros y los cuatro grupos de usos.
+
+El color va de menos a más mano: conservar, sostener, consolidar, mejorar,
+renovar, desarrollar. La norma no los ordena —son categorías— pero leídos así
+la leyenda cuenta dónde se protege y dónde se construye. Reparto por
+tratamiento: sostenimiento 906 ha, mejoramiento integral 708, consolidación
+644, desarrollo 484, renovación 412 y conservación 401.
+
+**Donde la norma no fija nada, la ficha dice «no fija» y no un cero.** La capa
+escribe «---» en esos huecos y `scripts/pit_urbano.py` los vacía: un retiro de
+cero metros es una regla, que la norma no diga nada es otra cosa, y en
+urbanismo confundirlas tiene consecuencias. Solo 17 de los 170 fijan altura
+máxima.
+
+#### 156 de los 170 traen texto cortado, y hay que decirlo
+
+El origen es un shapefile, y ahí **un campo de texto no pasa de 254 bytes**.
+Las listas de usos no caben: **140 PIT traen el uso prohibido cortado** y 110
+el restringido. No es una molestia de formato. Leer media lista de
+prohibiciones y concluir que algo se puede hacer es exactamente el error que
+esta ficha existe para impedir.
+
+No se puede recuperar aquí —el final nunca llegó—, así que el script detecta
+qué valores vienen al tope del campo, los marca con «…» y publica la columna
+`texto_cortado` diciendo cuáles. La ficha avisa **encima** de las listas, no
+debajo: un aviso al pie se lee después de haber sacado la conclusión.
+
+Se arregla en el origen, exportando a GeoPackage en vez de a shapefile. El
+script lo recalcula en cada corrida, así que el día que el origen venga bien
+esta cuenta baja a cero sola.
+
+Dos arreglos más, y ninguno reinterpreta el dato: el DBF viene en UTF-8 pero
+GDAL se niega a leerlo porque dos valores están cortados a mitad de carácter
+—se lee en ISO-8859-1 y se vuelve a decodificar—, y un registro traía
+«CONSERVACION» sin tilde frente a veinte con ella, que sin unificar daba siete
+tratamientos donde hay seis.
+
+Los números se quedan como texto a propósito: unos pocos no son un número sino
+un rango —un «1-8» de pisos, tres alturas como «12 - 18», un «160-320» de
+COS— y convertir la columna los perdería. CHASKI los compara como números igual.
+
 ### Catastro
 
 Se enciende en **Capas del mapa → Catastro · predios**: **41.681 predios** del

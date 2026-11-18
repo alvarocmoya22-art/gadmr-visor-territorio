@@ -1,7 +1,7 @@
 import { CATEGORIAS, colorSerie, type ClaveCategoria } from '../lib/categorias'
 import { numero } from '../lib/format'
 import type { Filtros as FiltrosT, Resumen } from '../hooks/usePuntos'
-import type { CapasVisibles, MapaCalor } from './Mapa'
+import { TRATAMIENTOS_PIT, type CapasVisibles, type MapaCalor } from './Mapa'
 import { URBANO, type Barrio, type Plataforma } from '../lib/municipal'
 import { colorUso } from '../lib/usos'
 import { MAPAS_BASE } from '../config/mapasBase'
@@ -71,6 +71,7 @@ const CAPAS: { clave: keyof CapasVisibles; rotulo: string }[] = [
   { clave: 'plataformas', rotulo: 'Plataformas' },
   { clave: 'parroquias', rotulo: 'Parroquias' },
   { clave: 'suelo', rotulo: 'Clasificación del suelo' },
+  { clave: 'pit', rotulo: 'Polígonos de intervención · PUGS' },
   { clave: 'cobertura', rotulo: 'Cobertura del suelo · ESA' },
   { clave: 'redVial', rotulo: 'Red vial del cantón · GADPCH' },
   { clave: 'barrios', rotulo: 'Barrios' },
@@ -321,6 +322,31 @@ export default function Filtros({
                         <span style={{ color: 'var(--gr-tinta-3)' }}>{s.rotulo}</span>
                       </li>
                     ))}
+                  </ul>
+                )}
+                {/* Seis tratamientos: sin leyenda, seis colores sobre la
+                    ciudad no dicen cuál es cuál. Van con sus hectáreas porque
+                    el número de polígonos engaña —21 de conservación pesan
+                    tanto como 29 de consolidación— y lo que se reparte es
+                    suelo, no polígonos. */}
+                {c.clave === 'pit' && capas.pit && (
+                  <ul className="mb-1 ml-5 mt-1 space-y-0.5">
+                    {TRATAMIENTOS_PIT.map((t) => (
+                      <li key={t.clave} className="flex items-center gap-2 text-[12px]">
+                        <span
+                          aria-hidden
+                          className="h-2.5 w-4 shrink-0 rounded-sm"
+                          style={{ background: `var(${t.token})`, opacity: 0.6 }}
+                        />
+                        <span style={{ color: 'var(--gr-tinta-3)' }}>
+                          {t.rotulo} · {t.ha} ha
+                        </span>
+                      </li>
+                    ))}
+                    <li className="pt-0.5 text-[11.5px]" style={{ color: 'var(--gr-tinta-3)' }}>
+                      170 polígonos, 3.556 ha: el suelo urbano entero. Pínchalos
+                      para ver lote mínimo, pisos, COS, retiros y usos.
+                    </li>
                   </ul>
                 )}
                 {c.clave === 'suelo' && capas.suelo && (

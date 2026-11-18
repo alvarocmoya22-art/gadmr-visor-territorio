@@ -72,6 +72,10 @@ const CAPAS_INICIALES: CapasVisibles = {
   plataformas: true,
   parroquias: false,
   suelo: false,
+  // Apagada al entrar: son 170 poligonos que cubren el urbano entero, y
+  // encendida de salida taparia la ciudad de color antes de que nadie haya
+  // preguntado nada. Ademas no se descarga hasta que se enciende.
+  pit: false,
   cobertura: false,
   redVial: false,
   barrios: false,
